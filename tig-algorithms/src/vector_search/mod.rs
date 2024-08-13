@@ -28,7 +28,7 @@
 
 // c004_a015
 
-// c004_a016
+pub mod fast_search; // c004_a016
 
 // c004_a017
 

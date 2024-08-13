@@ -6082,7 +6082,7 @@ browser = [
 
 # c004_a015 = ["tig-worker/c004_a015"]
 
-# c004_a016 = ["tig-worker/c004_a016"]
+vector_search_fast_search = ["tig-worker/vector_search_fast_search"]
 
 # c004_a017 = ["tig-worker/c004_a017"]
 
