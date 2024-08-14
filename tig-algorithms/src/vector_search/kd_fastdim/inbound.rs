@@ -155,12 +155,11 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
     //70, 460 => subet_size 1300
 
     let query_count = challenge.query_vectors.len();
-    let baseline = 6.0 - (challenge.difficulty.better_than_baseline as f32) / 1000.0;
 
     // Determine subset_size
     let subset_size = match query_count {
-        10..=19 if baseline <= 490.0 => 4200,
-        20..=70 if baseline <= 460.0 => 1300,
+        10..=19 if challenge.difficulty.better_than_baseline <= 490 => 4200,
+        20..=70 if challenge.difficulty.better_than_baseline <= 460 => 1300,
         _ => 5000, // Valeur par défaut si aucune correspondance n'est trouvée
     };
 
