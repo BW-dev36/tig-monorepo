@@ -13,6 +13,7 @@ pub fn compute_solution(
     max_fuel: u64,
 ) -> Result<Option<SolutionData>> {
     let seed = settings.calc_seed(nonce);
+    println!("Challenge id : {}", settings.challenge_id.as_str());
     let serialized_challenge = match settings.challenge_id.as_str() {
         "c001" => {
             let challenge =
@@ -9076,9 +9077,16 @@ pub fn compute_solution(
                     .unwrap();
             type SolveChallengeFn =
                 fn(&vector_search::Challenge) -> anyhow::Result<Option<vector_search::Solution>>;
+            println!("Running code for algo {}", settings.algorithm_id.as_str());
             match match settings.algorithm_id.as_str() {
                 // #[cfg(feature = "c004_a001")]
                 // "c004_a001" => Some(tig_algorithms::vector_search::c004_a001::solve_challenge as SolveChallengeFn),
+
+                // #[cfg(feature = "vector_search_kd_fastdim")]
+                // "c004" => {
+                //     println!("Running code");
+                //     Some(tig_algorithms::vector_search::kd_fastdim::solve_challenge as SolveChallengeFn)
+                // },
 
                 // #[cfg(feature = "c004_a002")]
                 // "c004_a002" => Some(tig_algorithms::vector_search::c004_a002::solve_challenge as SolveChallengeFn),
@@ -12107,6 +12115,8 @@ pub fn compute_solution(
             let engine = Engine::new(&config);
             let mut store = Store::new(&engine, limits);
             store.limiter(|lim| lim);
+            println!("Setting max_fuel {}", max_fuel);
+
             store.set_fuel(max_fuel).unwrap();
             let linker = Linker::new(&engine);
             let module = Module::new(store.engine(), wasm).expect("Failed to instantiate module");
@@ -12130,14 +12140,41 @@ pub fn compute_solution(
                 .expect("Failed to find `entry_point` function");
 
             let challenge_len = serialized_challenge.len() as u32;
-            let challenge_ptr: u32 = init.call(&mut store, challenge_len).unwrap();
-            memory
-                .write(&mut store, challenge_ptr as usize, &serialized_challenge)
-                .expect("Failed to write serialized challenge to `memory`");
-            let solution_ptr = entry_point
-                .call(&mut store, (challenge_ptr, challenge_len))
-                .map_err(|e| anyhow!("Failed to call function: {:?}", e))?;
+            println!("Challenge length: {}", challenge_len);
 
+            let challenge_ptr: u32 = match init.call(&mut store, challenge_len) {
+                Ok(ptr) => {
+                    println!("Received challenge_ptr from init: {}", ptr);
+                    ptr
+                }
+                Err(e) => {
+                    eprintln!("Failed to call init function: {:?}", e);
+                    return Err(anyhow!("Failed to call init function: {:?}", e));
+                }
+            };
+
+            match memory.write(&mut store, challenge_ptr as usize, &serialized_challenge) {
+                Ok(_) => {
+                    println!("Successfully wrote serialized challenge to memory at address {}", challenge_ptr);
+                }
+                Err(e) => {
+                    eprintln!("Failed to write serialized challenge to memory: {:?}", e);
+                    return Err(anyhow!("Failed to write serialized challenge to memory: {:?}", e));
+                }
+            };
+
+            let solution_ptr = match entry_point.call(&mut store, (challenge_ptr, challenge_len)) {
+                Ok(ptr) => {
+                    println!("Received solution_ptr from entry_point: {}", ptr);
+                    ptr
+                }
+                Err(e) => {
+                    eprintln!("Failed to call entry_point function: {:?}", e);
+                    return Err(anyhow!("Failed to call function: {:?}", e));
+                }
+            };
+
+            println!("Function call successful, solution_ptr: {}", solution_ptr);
             // Get runtime signature
             let runtime_signature_u64 = store.get_runtime_signature();
             let runtime_signature =

@@ -33,6 +33,8 @@ satisfiability_schnoing = []
 
 satisfiability_walk_sat = []
 
+vector_search_kd_fastdim = []
+
 # c001_a006 = []
 
 # c001_a007 = []
