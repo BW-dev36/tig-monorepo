@@ -146,7 +146,23 @@ fn filter_relevant_vectors<'a>(
 }
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    let subset_size = 4000;
+
+    //10, 460 => subet_size 4200
+    //20, 460 => subet_size 1300
+    //30, 460 => subet_size 1300
+    //40, 460 => subet_size 1300
+    //60, 460 => subet_size 1300
+    //70, 460 => subet_size 1300
+
+    let query_count = challenge.query_vectors.len();
+    let baseline = 6.0 - (challenge.difficulty.better_than_baseline as f32) / 1000.0;
+
+    // Determine subset_size
+    let subset_size = match query_count {
+        10..=19 if baseline <= 490.0 => 4200,
+        20..=70 if baseline <= 460.0 => 1300,
+        _ => 5000, // Valeur par défaut si aucune correspondance n'est trouvée
+    };
 
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
