@@ -176,16 +176,16 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
 
     let subset_size = match query_count {
         10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
-        10..=19 if challenge.difficulty.better_than_baseline > 470 => 15000,  // need more fuel
+        10..=19 if challenge.difficulty.better_than_baseline > 470 => 4200,
         20..=28 if challenge.difficulty.better_than_baseline <= 465 => 3000,
-        20..=28 if challenge.difficulty.better_than_baseline > 465 => 10000, // need more fuel
+        20..=28 if challenge.difficulty.better_than_baseline > 465 => 3000, // need more fuel
         29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
-        29..=50 if challenge.difficulty.better_than_baseline > 480 => 8000, // need more fuel
+        29..=50 if challenge.difficulty.better_than_baseline > 480 => 2000, // need more fuel
         51..=70 if challenge.difficulty.better_than_baseline <= 480 => 1300,
-        51..=70 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
+        51..=70 if challenge.difficulty.better_than_baseline > 480 => 1300, // need more fuel
         71..=100 if challenge.difficulty.better_than_baseline <= 445 => 1000,
-        71..=100 if challenge.difficulty.better_than_baseline > 445 => 5000, // need more fuel
-        _ => 15000, // need more fuel
+        71..=100 if challenge.difficulty.better_than_baseline > 445 => 1000, // need more fuel
+        _ => 1000, // need more fuel
     };
 
     let subset = filter_relevant_vectors(
