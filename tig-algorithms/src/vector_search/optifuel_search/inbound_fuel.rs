@@ -1,3 +1,17 @@
+/*!
+Copyright 2024 bw-dev36
+
+Licensed under the TIG Inbound Game License v1.0 or (at your option) any later
+version (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+
+https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
+language governing permissions and limitations under the License.
+*/
 use anyhow::Ok;
 use tig_challenges::vector_search::*;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
@@ -176,16 +190,16 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
 
     let subset_size = match query_count {
         10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
-        10..=19 if challenge.difficulty.better_than_baseline > 470 => 4200,
+        10..=19 if challenge.difficulty.better_than_baseline > 470 => 15000,  // need more fuel
         20..=28 if challenge.difficulty.better_than_baseline <= 465 => 3000,
-        20..=28 if challenge.difficulty.better_than_baseline > 465 => 3000, // need more fuel
+        20..=28 if challenge.difficulty.better_than_baseline > 465 => 10000, // need more fuel
         29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
-        29..=50 if challenge.difficulty.better_than_baseline > 480 => 2000, // need more fuel
+        29..=50 if challenge.difficulty.better_than_baseline > 480 => 8000, // need more fuel
         51..=70 if challenge.difficulty.better_than_baseline <= 480 => 1300,
-        51..=70 if challenge.difficulty.better_than_baseline > 480 => 1300, // need more fuel
+        51..=70 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
         71..=100 if challenge.difficulty.better_than_baseline <= 445 => 1000,
-        71..=100 if challenge.difficulty.better_than_baseline > 445 => 1000, // need more fuel
-        _ => 1000, // need more fuel
+        71..=100 if challenge.difficulty.better_than_baseline > 445 => 5000, // need more fuel
+        _ => 15000, // need more fuel
     };
 
     let subset = filter_relevant_vectors(

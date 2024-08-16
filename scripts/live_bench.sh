@@ -10,13 +10,17 @@ echo "Block ID: $block_id"
 
 # 2. Récupérer les détails des challenges en utilisant l'ID du bloc
 challenges_response=$(curl -s "https://mainnet-api.tig.foundation/get-challenges?block_id=$block_id")
+export ALGORITHM_LOCAL=${ALGORITHM:-optimax_search}
+export CHALLENGE_LOCAL=${CHALLENGE:-vector_search}
 
-export ALGOS_TO_COMPILE=vector_search_kd_fastdim
+export ALGOS_TO_COMPILE=${CHALLENGE_LOCAL}_${ALGORITHM_LOCAL}
 export NONCE=0
-export WASM=./tig-algorithms/wasm/vector_search/kd_fastdim.wasm
-export CHALLENGE=vector_search
-export ALGORITHM=kd_fastdim
+export WASM=./tig-algorithms/wasm/${CHALLENGE_LOCAL}/${ALGORITHM_LOCAL}.wasm
 
+#For wasm building
+export ALGORITHM=${ALGORITHM_LOCAL}
+export CHALLENGE=${CHALLENGE_LOCAL}
+echo "Challenge ${CHALLENGE} Algorithm = ${ALGORITHM}"
 num_solutions=0
 num_invalid=0
 num_errors=0
@@ -26,7 +30,7 @@ ON_SETTINGS=$1
 
 echo "Building wasm..."
 cargo build -p tig-wasm --target wasm32-wasi --release --features entry-point
-wasm-opt target/wasm32-wasi/release/tig_wasm.wasm -o tig-algorithms/wasm/${CHALLENGE}/${ALGORITHM}.wasm -O2 --remove-imports
+wasm-opt target/wasm32-wasi/release/tig_wasm.wasm -o tig-algorithms/wasm/${CHALLENGE_LOCAL}/${ALGORITHM_LOCAL}.wasm -O2 --remove-imports
 
 
 # 3. Extraire et itérer sur les paires de qualifier_difficulties pour le challenge 'c004'
@@ -39,7 +43,7 @@ echo "$challenges_response" | jq -c '.challenges[] | select(.id=="c004") | .bloc
         SETTINGS="{\"challenge_id\":\"c004\",\"difficulty\":$pair,\"algorithm_id\":\"c004\",\"player_id\":\"\",\"block_id\":\"\"}"
     fi
     start_time=$(date +%s%3N)
-    output=$(./target/release/tig-worker compute_solution --fuel 10000000000 $SETTINGS $NONCE $WASM 2>&1)
+    output=$(./target/release/tig-worker compute_solution $SETTINGS $NONCE $WASM 2>&1)
     exit_code=$?
     end_time=$(date +%s%3N)
     duration=$((end_time - start_time))

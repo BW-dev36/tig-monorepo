@@ -20,7 +20,7 @@ use rand::SeedableRng;
 use tig_challenges::satisfiability::*;
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    let mut rng = StdRng::seed_from_u64(challenge.seed as u64);
+    let mut rng = StdRng::seed_from_u64(challenge.seeds[0] as u64);
     let num_variables = challenge.difficulty.num_variables;
     let max_flips = 1000;
 
@@ -52,3 +52,25 @@ fn clause_satisfied(clause: &Vec<i32>, variables: &[bool]) -> bool {
         (literal > 0 && variables[var_idx]) || (literal < 0 && !variables[var_idx])
     })
 }
+
+#[cfg(feature = "cuda")]
+mod gpu_optimisation {
+    use super::*;
+    use cudarc::driver::*;
+    use std::{collections::HashMap, sync::Arc};
+    use tig_challenges::CudaKernel;
+
+    // set KERNEL to None if algorithm only has a CPU implementation
+    pub const KERNEL: Option<CudaKernel> = None;
+
+    // Important! your GPU and CPU version of the algorithm should return the same result
+    pub fn cuda_solve_challenge(
+        challenge: &Challenge,
+        dev: &Arc<CudaDevice>,
+        mut funcs: HashMap<&'static str, CudaFunction>,
+    ) -> anyhow::Result<Option<Solution>> {
+        solve_challenge(challenge)
+    }
+}
+#[cfg(feature = "cuda")]
+pub use gpu_optimisation::{cuda_solve_challenge, KERNEL};

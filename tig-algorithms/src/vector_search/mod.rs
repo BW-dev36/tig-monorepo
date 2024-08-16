@@ -1,4 +1,4 @@
-pub mod kd_fastdim;
+pub mod optimax_search;
 
 
 #[cfg(test)]
@@ -28,9 +28,9 @@ mod tests {
             num_queries: 10,
             better_than_baseline: 500,
         };
-        let seed = 323437; // change this to generate different instances
+        let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
         let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
-        match kd_fastdim::solve_challenge(&challenge) {
+        match optimax_search::solve_challenge(&challenge) {
             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                 Ok(_) => println!("Valid solution"),
                 Err(e) => println!("Invalid solution: {}", e),

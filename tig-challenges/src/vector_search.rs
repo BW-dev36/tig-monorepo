@@ -1,12 +1,15 @@
-use crate::{ChallengeTrait, DifficultyTrait, SolutionTrait};
+use crate::{ChallengeTrait, DifficultyTrait, RngArray, SolutionTrait};
 use anyhow::{anyhow, Ok, Result};
-use rand::{
-    distributions::{Distribution, Uniform},
-    rngs::StdRng,
-    SeedableRng,
-};
+use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Map, Value};
+
+#[cfg(feature = "cuda")]
+use crate::CudaKernel;
+#[cfg(feature = "cuda")]
+use cudarc::driver::*;
+#[cfg(feature = "cuda")]
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Difficulty {
@@ -44,7 +47,7 @@ impl TryFrom<Map<String, Value>> for Solution {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Challenge {
-    pub seed: u32,
+    pub seeds: [u64; 8],
     pub difficulty: Difficulty,
     pub vector_database: Vec<Vec<f32>>,
     pub query_vectors: Vec<Vec<f32>>,
@@ -59,20 +62,35 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
         .sqrt()
 }
 
+// TIG dev bounty available for a GPU optimisation for instance generation!
+#[cfg(feature = "cuda")]
+pub const KERNEL: Option<CudaKernel> = None;
+
 impl ChallengeTrait<Solution, Difficulty, 2> for Challenge {
-    fn generate_instance(seed: u32, difficulty: &Difficulty) -> Result<Self> {
-        let mut rng = StdRng::seed_from_u64(seed as u64);
+    #[cfg(feature = "cuda")]
+    fn cuda_generate_instance(
+        seeds: [u64; 8],
+        difficulty: &Difficulty,
+        dev: &Arc<CudaDevice>,
+        mut funcs: HashMap<&'static str, CudaFunction>,
+    ) -> Result<Self> {
+        // TIG dev bounty available for a GPU optimisation for instance generation!
+        Self::generate_instance(seeds, difficulty)
+    }
+
+    fn generate_instance(seeds: [u64; 8], difficulty: &Difficulty) -> Result<Self> {
+        let mut rngs = RngArray::new(seeds);
         let uniform = Uniform::from(0.0..1.0);
         let search_vectors = (0..100000)
-            .map(|_| (0..250).map(|_| uniform.sample(&mut rng)).collect())
+            .map(|_| (0..250).map(|_| uniform.sample(rngs.get_mut())).collect())
             .collect();
         let query_vectors = (0..difficulty.num_queries)
-            .map(|_| (0..250).map(|_| uniform.sample(&mut rng)).collect())
+            .map(|_| (0..250).map(|_| uniform.sample(rngs.get_mut())).collect())
             .collect();
         let max_distance = 6.0 - (difficulty.better_than_baseline as f32) / 1000.0;
 
         Ok(Self {
-            seed,
+            seeds,
             difficulty: difficulty.clone(),
             vector_database: search_vectors,
             query_vectors,
