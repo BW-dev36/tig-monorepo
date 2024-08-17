@@ -16,7 +16,6 @@ language governing permissions and limitations under the License.
 use anyhow::Ok;
 use tig_challenges::vector_search::*;
 
-
 struct KDNode<'a> {
     point: &'a [f32],
     left: Option<Box<KDNode<'a>>>,
@@ -35,9 +34,7 @@ impl<'a> KDNode<'a> {
     }
 }
 
-fn build_kd_tree<'a>(
-    points: &mut [(&'a [f32], usize)],
-) -> Option<Box<KDNode<'a>>> {
+fn build_kd_tree<'a>(points: &mut [(&'a [f32], usize)]) -> Option<Box<KDNode<'a>>> {
     if points.is_empty() {
         return None;
     }
@@ -85,7 +82,6 @@ fn build_kd_tree<'a>(
         }
     }
 
-
     root
 }
 
@@ -94,6 +90,18 @@ fn squared_euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
     for i in 0..a.len() {
         let diff = a[i] - b[i];
         sum += diff * diff;
+    }
+    sum
+}
+
+fn early_stopping_distance(a: &[f32], b: &[f32], current_min: f32) -> f32 {
+    let mut sum = 0.0;
+    for i in 0..a.len() {
+        let diff = a[i] - b[i];
+        sum += diff * diff;
+        if sum > current_min {
+            return f32::MAX;
+        }
     }
     sum
 }
@@ -112,7 +120,7 @@ fn nearest_neighbor_search<'a>(
 
     while let Some((node, depth)) = stack.pop() {
         let axis = depth % num_dimensions;
-        let dist = squared_euclidean_distance(&node.point, target);
+        let dist = early_stopping_distance(&node.point, target, best.0);
 
         if dist < best.0 {
             best.0 = dist;
@@ -157,15 +165,13 @@ fn calculate_mean_vector(vectors: &[&[f32]]) -> Vec<f32> {
     mean_vector
 }
 
-
 fn filter_relevant_vectors<'a>(
     database: &'a [Vec<f32>],
     query_vectors: &[Vec<f32>],
     k: usize,
-)  -> Vec<(&'a [f32], usize)> {
+) -> Vec<(&'a [f32], usize)> {
     let query_refs: Vec<&[f32]> = query_vectors.iter().map(|v| &v[..]).collect();
     let mean_query_vector = calculate_mean_vector(&query_refs);
-
 
     let mut distances: Vec<(usize, f32)> = database
         .iter()
@@ -199,13 +205,13 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         51..=70 if challenge.difficulty.better_than_baseline > 480 => 1300, // need more fuel
         71..=100 if challenge.difficulty.better_than_baseline <= 445 => 1000,
         71..=100 if challenge.difficulty.better_than_baseline > 445 => 1000, // need more fuel
-        _ => 1000, // need more fuel
+        _ => 1000,                                                           // need more fuel
     };
 
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
-        subset_size
+        subset_size,
     );
 
     let kd_tree = build_kd_tree(&mut subset.clone());
