@@ -25,11 +25,12 @@ mod tests {
             // better_than_baseline: 10,
 
             //-- vector_search --
-            num_queries: 10,
-            better_than_baseline: 500,
+            num_queries: 35,
+            better_than_baseline: 510,
         };
         let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
         let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
+        println!("Running test ...");
         match optimax_search::solve_challenge(&challenge) {
             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                 Ok(_) => println!("Valid solution"),
