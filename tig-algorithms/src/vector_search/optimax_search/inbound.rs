@@ -15,7 +15,7 @@ language governing permissions and limitations under the License.
 
 use anyhow::Ok;
 use tig_challenges::vector_search::*;
-use std::time::Instant;
+// use std::time::Instant;
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -312,7 +312,7 @@ fn filter_relevant_vectors_old<'a>(
 
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    let start_total = Instant::now();
+    //let start_total = Instant::now();
 
     let query_count = challenge.query_vectors.len();
 
@@ -320,31 +320,32 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
         10..=19 if challenge.difficulty.better_than_baseline > 470 => 4200,
         20..=28 if challenge.difficulty.better_than_baseline <= 465 => 3000,
-        20..=28 if challenge.difficulty.better_than_baseline > 465 => 3000, // need more fuel
+        20..=28 if challenge.difficulty.better_than_baseline > 465 => 6000, // need more fuel
         29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
-        29..=50 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
-        51..=70 if challenge.difficulty.better_than_baseline <= 480 => 1300,
+        29..=45 if challenge.difficulty.better_than_baseline > 480 => 6000,
+        45..=50 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
+        51..=70 if challenge.difficulty.better_than_baseline <= 480 => 3000,
         51..=70 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
-        71..=100 if challenge.difficulty.better_than_baseline <= 445 => 1000,
-        71..=100 if challenge.difficulty.better_than_baseline > 445 => 1000, // need more fuel
-        _ => 15000,                                                           // need more fuel
+        71..=100 if challenge.difficulty.better_than_baseline <= 480 => 1500,
+        71..=100 if challenge.difficulty.better_than_baseline > 480 => 2500, // need more fuel
+        _ => 10,                                                           // need more fuel
     };
 
-    let start_filter = Instant::now();
+    //let start_filter = Instant::now();
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
         subset_size,
     );
-    let duration_filter = start_filter.elapsed();
-    println!("Time taken for filtering relevant vectors: {:?}", duration_filter);
+    //let duration_filter = start_filter.elapsed();
+    //println!("Time taken for filtering relevant vectors: {:?}", duration_filter);
 
-    let start_build_kd_tree = Instant::now();
+    //let start_build_kd_tree = Instant::now();
     let kd_tree = build_kd_tree(&mut subset.clone());
-    let duration_build_kd_tree = start_build_kd_tree.elapsed();
-    println!("Time taken for building KD-Tree: {:?}", duration_build_kd_tree);
+    //let duration_build_kd_tree = start_build_kd_tree.elapsed();
+    //println!("Time taken for building KD-Tree: {:?}", duration_build_kd_tree);
 
-    let start_search = Instant::now();
+    //let start_search = Instant::now();
     let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
 
     for query in challenge.query_vectors.iter() {
@@ -355,11 +356,11 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
             best_indexes.push(best_index);
         }
     }
-    let duration_search = start_search.elapsed();
-    println!("Time taken for nearest neighbor search: {:?}", duration_search);
+    //let duration_search = start_search.elapsed();
+    //println!("Time taken for nearest neighbor search: {:?}", duration_search);
 
-    let total_duration = start_total.elapsed();
-    println!("Total time taken by solve_challenge: {:?}", total_duration);
+    //let total_duration = start_total.elapsed();
+    //println!("Total time taken by solve_challenge: {:?}", total_duration);
 
     Ok(Some(Solution {
         indexes: best_indexes,
