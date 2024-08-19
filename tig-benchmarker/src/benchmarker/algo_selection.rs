@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::error::Error;
 
 pub async fn select_algorithms_to_run(
-    player_id: String,
+    player_id: &str,
     algo_selection: &HashMap<String, String>,
 ) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut algo_map = HashMap::new();
@@ -37,7 +37,7 @@ async fn fetch_block_id() -> Result<Option<String>, Box<dyn Error>> {
 }
 
 async fn fetch_solutions(
-    player_id: String,
+    player_id: &str,
     block_id: &str,
 ) -> Result<HashMap<String, i32>, Box<dyn Error>> {
     let mut solutions: HashMap<String, i32> = HashMap::new();
@@ -52,7 +52,7 @@ async fn fetch_solutions(
         for algo in algorithms {
             if let Some(challenge_id) = algo["details"]["challenge_id"].as_str() {
                 if let Some(num_qualifiers) =
-                    algo["block_data"]["num_qualifiers_by_player"][player_id.clone()].as_i64()
+                    algo["block_data"]["num_qualifiers_by_player"][player_id].as_i64()
                 {
                     let entry = solutions.entry(challenge_id.to_string()).or_insert(0);
                     *entry += num_qualifiers as i32;

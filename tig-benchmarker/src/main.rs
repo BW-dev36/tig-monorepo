@@ -283,7 +283,8 @@ async fn master_node(
         .unwrap();
 
         let optimised_algos = match benchmarker::algo_selection::select_algorithms_to_run(
-            player_id, &selection,
+            &player_id.clone(),
+            &selection,
         )
         .await
         {
