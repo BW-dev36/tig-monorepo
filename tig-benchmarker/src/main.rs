@@ -239,7 +239,7 @@ async fn master_node(
     port: u16,
     nonce_offset: u64,
 ) {
-    benchmarker::setup(api_url, api_key, player_id).await;
+    benchmarker::setup(api_url, api_key, player_id.clone()).await;
     benchmarker::start(num_workers, duration).await;
     future_utils::spawn(async move {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
