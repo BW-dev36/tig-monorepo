@@ -38,6 +38,7 @@ wasm-bindgen = { version = "0.2.91", features = [
 wasm-bindgen-futures = { version = "0.4.41", optional = true }
 warp = { version = "0.3.7", optional = true }
 web-sys = { version = "0.3.68", features = ['console'], optional = true }
+reqwest = { version = "0.12.2", features = ["json"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

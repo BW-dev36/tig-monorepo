@@ -1,3 +1,4 @@
+pub mod algo_selection;
 mod difficulty_sampler;
 pub mod download_wasm;
 mod find_proof_to_submit;

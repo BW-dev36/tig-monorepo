@@ -281,7 +281,19 @@ async fn master_node(
             &fs::read_to_string(algorithms_path).unwrap(),
         )
         .unwrap();
-        for (challenge_id, algorithm_id) in selection {
+
+        let optimised_algos =
+            match benchmarker::algo_selection::select_algorithms_to_run(&player_id, &selection)
+                .await
+            {
+                Ok(selected_algos) if !selected_algos.is_empty() => {
+                    println!("Switch to algos: {:?}", selected_algos);
+                    selected_algos
+                }
+                _ => selection.clone(),
+            };
+
+        for (challenge_id, algorithm_id) in optimised_algos {
             benchmarker::select_algorithm(challenge_id, algorithm_id).await;
         }
         future_utils::sleep(10000).await;
