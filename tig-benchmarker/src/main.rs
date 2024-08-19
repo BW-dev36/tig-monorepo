@@ -288,12 +288,10 @@ async fn master_node(
         )
         .await
         {
-            Ok(selected_algos) if !selected_algos.is_empty() => {
-                println!("Switch to algos: {:?}", selected_algos);
-                selected_algos
-            }
+            Ok(selected_algos) if !selected_algos.is_empty() => selected_algos,
             _ => selection.clone(),
         };
+        println!("Automatically switch to algos: {:?}", optimised_algos);
 
         for (challenge_id, algorithm_id) in optimised_algos {
             benchmarker::select_algorithm(challenge_id, algorithm_id).await;
