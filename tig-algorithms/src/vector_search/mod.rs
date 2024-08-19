@@ -25,7 +25,7 @@ mod tests {
             // better_than_baseline: 10,
 
             //-- vector_search --
-            num_queries: 35,
+            num_queries: 20,
             better_than_baseline: 510,
         };
         let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
@@ -42,6 +42,91 @@ mod tests {
     }
 }
 
+#[cfg(feature = "cuda")]
+#[cfg(test)]
+mod cuda_tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use cudarc::driver::*;
+    use cudarc::nvrtc::compile_ptx;
+    use std::sync::Arc;
+    use tig_challenges::{vector_search::*, *};
+
+    fn load_cuda_functions(
+        dev: &Arc<CudaDevice>,
+        kernel: &CudaKernel,
+        key: &str,
+    ) -> HashMap<&'static str, CudaFunction> {
+        let start = std::time::Instant::now();
+        println!("Compiling CUDA kernels for {}", key);
+        let ptx = compile_ptx(kernel.src).expect("Cuda Kernel failed to compile");
+        dev.load_ptx(ptx, key, &kernel.funcs)
+            .expect("Failed to load CUDA functions");
+        let funcs = kernel
+            .funcs
+            .iter()
+            .map(|&name| (name, dev.get_func(key, name).unwrap()))
+            .collect();
+        println!(
+            "CUDA kernels for '{}' compiled in {}ms",
+            key,
+            start.elapsed().as_millis()
+        );
+        funcs
+    }
+
+    #[test]
+    fn test_cuda_optimax_search_cuda() {
+        let dev = CudaDevice::new(0).expect("Failed to create CudaDevice");
+        let challenge_cuda_funcs = match &vector_search::KERNEL {
+            Some(kernel) => load_cuda_functions(&dev, &kernel, "challenge"),
+            None => {
+                println!("No CUDA kernel for challenge");
+                HashMap::new()
+            }
+        };
+        let algorithm_cuda_funcs = match &optimax_search::KERNEL {
+            Some(kernel) => load_cuda_functions(&dev, &kernel, "algorithm"),
+            None => {
+                println!("No CUDA kernel for algorithm");
+                HashMap::new()
+            }
+        };
+
+        let difficulty = Difficulty {
+            // Uncomment the relevant fields.
+            // Modify the values for different difficulties
+
+            // -- satisfiability --
+            // num_variables: 50,
+            // clauses_to_variables_percent: 300,
+            // -- vehicle_routing --
+            // num_nodes: 40,
+            // better_than_baseline: 250,
+
+            // -- knapsack --
+            // num_items: 50,
+            // better_than_baseline: 10,
+
+            // -- vector_search --
+            num_queries: 10,
+            better_than_baseline: 350,
+        };
+        let seeds = [0; 8]; // change this to generate different instances
+        let challenge =
+            Challenge::cuda_generate_instance(seeds, &difficulty, &dev, challenge_cuda_funcs)
+                .unwrap();
+        match optimax_search::cuda_solve_challenge(&challenge, &dev, algorithm_cuda_funcs) {
+            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+                Ok(_) => println!("Valid solution"),
+                Err(e) => println!("Invalid solution: {}", e),
+            },
+            Ok(None) => println!("No solution"),
+            Err(e) => println!("Algorithm error: {}", e),
+        };
+    }
+}
 // c004_a001
 
 // c004_a002
