@@ -14,8 +14,8 @@ language governing permissions and limitations under the License.
 */
 
 use anyhow::Ok;
-use tig_challenges::vector_search::*;
 use std::time::Instant;
+use tig_challenges::vector_search::*;
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -253,12 +253,17 @@ fn filter_relevant_vectors<'a>(
 
     for (index, vector) in database.iter().enumerate() {
         let dist = squared_euclidean_distance(&mean_query_vector, vector);
+
         let ord_dist = FloatOrd(dist);
+        // println!("{},{}", index, dist);
+        // println!("{},{:#?}", index, ord_dist);
         if heap.len() < k {
+            // println!("{},{:#?}", index, ord_dist);
             heap.push((ord_dist, index));
         } else if let Some(&(FloatOrd(top_dist), _)) = heap.peek() {
             if dist < top_dist {
                 heap.pop();
+                // println!("{},{:#?}", index, ord_dist);
                 heap.push((ord_dist, index));
             }
         }
@@ -274,7 +279,7 @@ fn filter_relevant_vectors<'a>(
 }
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    //let start_total = Instant::now();
+    let start_total = Instant::now();
 
     let query_count = challenge.query_vectors.len();
 
@@ -293,21 +298,27 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         _ => 10,                                                             // need more fuel
     };
 
-    //let start_filter = Instant::now();
+    let start_filter = Instant::now();
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
         subset_size,
     );
-    //let duration_filter = start_filter.elapsed();
-    //println!("Time taken for filtering relevant vectors: {:?}", duration_filter);
+    let duration_filter = start_filter.elapsed();
+    println!(
+        "Time taken for filtering relevant vectors: {:?}",
+        duration_filter
+    );
 
-    //let start_build_kd_tree = Instant::now();
+    let start_build_kd_tree = Instant::now();
     let kd_tree = build_kd_tree(&mut subset.clone());
-    //let duration_build_kd_tree = start_build_kd_tree.elapsed();
-    //println!("Time taken for building KD-Tree: {:?}", duration_build_kd_tree);
+    let duration_build_kd_tree = start_build_kd_tree.elapsed();
+    println!(
+        "Time taken for building KD-Tree: {:?}",
+        duration_build_kd_tree
+    );
 
-    //let start_search = Instant::now();
+    let start_search = Instant::now();
     let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
 
     for query in challenge.query_vectors.iter() {
@@ -318,11 +329,14 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
             best_indexes.push(best_index);
         }
     }
-    //let duration_search = start_search.elapsed();
-    //println!("Time taken for nearest neighbor search: {:?}", duration_search);
+    let duration_search = start_search.elapsed();
+    println!(
+        "Time taken for nearest neighbor search: {:?}",
+        duration_search
+    );
 
-    //let total_duration = start_total.elapsed();
-    //println!("Total time taken by solve_challenge: {:?}", total_duration);
+    let total_duration = start_total.elapsed();
+    println!("Total time taken by solve_challenge: {:?}", total_duration);
 
     Ok(Some(Solution {
         indexes: best_indexes,
@@ -354,8 +368,132 @@ mod gpu_optimisation {
         
         "#,
 
-        funcs: &["filter_vectors", "build_kd_tree", "nearest_neighbor_search"],
+        funcs: &["filter_vectors"],
     });
+
+    fn compare_filter_results(
+        subset_cpu: &Vec<(&[f32], usize)>,
+        subset_gpu: &Vec<(&[f32], usize)>,
+    ) -> bool {
+        if subset_cpu.len() != subset_gpu.len() {
+            println!(
+                "Length mismatch: CPU subset length = {}, GPU subset length = {}",
+                subset_cpu.len(),
+                subset_gpu.len()
+            );
+            return false;
+        }
+
+        for i in 0..subset_cpu.len() {
+            let (vector_cpu, index_cpu) = subset_cpu[i];
+            let (vector_gpu, index_gpu) = subset_gpu[i];
+
+            if index_cpu != index_gpu {
+                println!(
+                    "Index mismatch at position {}: CPU index = {}, GPU index = {}",
+                    i, index_cpu, index_gpu
+                );
+                return false;
+            }
+
+            for j in 0..vector_cpu.len() {
+                if (vector_cpu[j] - vector_gpu[j]).abs() > 1e-5 {
+                    println!(
+                        "Value mismatch at position [{}][{}]: CPU value = {}, GPU value = {}, difference = {}",
+                        i,
+                        j,
+                        vector_cpu[j],
+                        vector_gpu[j],
+                        (vector_cpu[j] - vector_gpu[j]).abs()
+                    );
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    use std::time::Instant;
+
+    fn compare_distances_cpu_gpu(
+        database: &[Vec<f32>],
+        mean_query_vector: &[f32],
+        dev: &Arc<CudaDevice>,
+        mut funcs: HashMap<&'static str, CudaFunction>,
+    ) -> anyhow::Result<()> {
+        let num_vectors = database.len();
+        let num_dimensions = mean_query_vector.len();
+
+        // Calcul des distances sur le CPU
+        let start_cpu = Instant::now();
+        let distances_cpu: Vec<f32> = database
+            .iter()
+            .map(|vector| squared_euclidean_distance(mean_query_vector, vector))
+            .collect();
+        let duration_cpu = start_cpu.elapsed();
+        println!(
+            "Time taken for calculating distances on CPU: {:?}",
+            duration_cpu
+        );
+
+        // Calcul des distances sur le GPU
+        let start_gpu = Instant::now();
+        let flattened_database: Vec<f32> = database.iter().flatten().cloned().collect();
+        let database_dev = dev.htod_sync_copy(&flattened_database)?;
+        let mean_query_dev = dev.htod_sync_copy(&mean_query_vector)?;
+        let mut distances_dev = dev.alloc_zeros::<f32>(num_vectors)?;
+
+        let cfg = LaunchConfig {
+            block_dim: (256, 1, 1),
+            grid_dim: ((num_vectors as u32 + 255) / 256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+       
+        unsafe {
+            funcs.remove("filter_vectors").unwrap().launch(
+                cfg,
+                (
+                    &mean_query_dev,
+                    &database_dev,
+                    &mut distances_dev,
+                    num_vectors as i32,
+                    num_dimensions as i32,
+                ),
+            )
+        }?;
+       
+        let mut distances_gpu = vec![0.0f32; num_vectors];
+        dev.dtoh_sync_copy_into(&distances_dev, &mut distances_gpu)?;
+        let duration_gpu = start_gpu.elapsed();
+        println!(
+            "Time taken for calculating distances on GPU: {:?}",
+            duration_gpu
+        );
+
+        // Comparaison des distances CPU et GPU
+        let mut discrepancies = 0;
+        for (i, (dist_cpu, dist_gpu)) in distances_cpu.iter().zip(&distances_gpu).enumerate() {
+            if (dist_cpu - dist_gpu).abs() > 1e-5 {
+                println!(
+                "Discrepancy found at index {}: CPU distance = {}, GPU distance = {}, difference = {}",
+                i,
+                dist_cpu,
+                dist_gpu,
+                (dist_cpu - dist_gpu).abs()
+            );
+                discrepancies += 1;
+            }
+        }
+
+        if discrepancies == 0 {
+            println!("No discrepancies found between CPU and GPU distances.");
+        } else {
+            println!("Total discrepancies found: {}", discrepancies);
+        }
+
+        Ok(())
+    }
 
     pub fn cuda_solve_challenge(
         challenge: &Challenge,
@@ -379,19 +517,52 @@ mod gpu_optimisation {
             _ => 10,
         };
 
+       
+
+        // Filtrage des vecteurs pertinents sur CPU
+        let start_filter = Instant::now();
+        let subset_cpu = filter_relevant_vectors(
+            &challenge.vector_database,
+            &challenge.query_vectors,
+            subset_size,
+        );
+        let duration_filter_cpu = start_filter.elapsed();
+        println!(
+            "Time taken for filtering relevant vectors on CPU: {:?}",
+            duration_filter_cpu
+        );
+
         // Filtrage des vecteurs pertinents sur GPU
-        let subset = cuda_filter_relevant_vectors(
+        let start_filter_gpu = Instant::now();
+        let subset_gpu = cuda_filter_relevant_vectors(
             &challenge.vector_database,
             &challenge.query_vectors,
             subset_size,
             dev,
             funcs,
         )?;
+        let duration_filter_gpu = start_filter_gpu.elapsed();
+        println!(
+            "Time taken for filtering relevant vectors on GPU: {:?}",
+            duration_filter_gpu
+        );
+
+        // Comparaison des résultats
+        let results_match = compare_filter_results(&subset_cpu, &subset_gpu);
+
+        if results_match {
+            println!("CPU and GPU results match.");
+        } else {
+            println!("CPU and GPU results do NOT match!");
+        }
 
         let start_build_kd_tree = Instant::now();
-        let kd_tree = build_kd_tree(&mut subset.clone());
+        let kd_tree = build_kd_tree(&mut subset_gpu.clone());
         let duration_build_kd_tree = start_build_kd_tree.elapsed();
-        println!("Time taken for building KD-Tree: {:?}", duration_build_kd_tree);
+        println!(
+            "Time taken for building KD-Tree: {:?}",
+            duration_build_kd_tree
+        );
 
         //let start_search = Instant::now();
         let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
@@ -406,7 +577,7 @@ mod gpu_optimisation {
         }
         //let duration_search = start_search.elapsed();
         //println!("Time taken for nearest neighbor search: {:?}", duration_search);
-        
+
         //let kd_tree = cuda_build_kd_tree(&mut subset.clone(), dev, funcs);
 
         // let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
@@ -432,29 +603,31 @@ mod gpu_optimisation {
         dev: &Arc<CudaDevice>,
         mut funcs: HashMap<&'static str, CudaFunction>,
     ) -> anyhow::Result<Vec<(&'a [f32], usize)>> {
-       
         let query_refs: Vec<&[f32]> = query_vectors.iter().map(|v| &v[..]).collect();
         let mean_query_vector = calculate_mean_vector(&query_refs);
+
+        // compare_distances_cpu_gpu(
+        //     &database,
+        //     &mean_query_vector,
+        //     dev,
+        //     funcs.clone(),
+        // )?;
 
         let num_vectors = database.len();
         let num_dimensions = 250;
 
-        // Flattener les données de la base de données
         let flattened_database: Vec<f32> = database.iter().flatten().cloned().collect();
 
-        // Allocation sur le GPU
         let database_dev = dev.htod_sync_copy(&flattened_database)?;
         let mean_query_dev = dev.htod_sync_copy(&mean_query_vector)?;
         let mut distances_dev = dev.alloc_zeros::<f32>(num_vectors)?;
 
-        // Configurer le kernel CUDA
         let cfg = LaunchConfig {
             block_dim: (256, 1, 1),
             grid_dim: ((num_vectors as u32 + 255) / 256, 1, 1),
             shared_mem_bytes: 0,
         };
 
-        // Lancer le kernel CUDA
         unsafe {
             funcs.remove("filter_vectors").unwrap().launch(
                 cfg,
@@ -468,15 +641,16 @@ mod gpu_optimisation {
             )
         }?;
 
-        // Copier les résultats des distances depuis le GPU
         let mut distances_host = vec![0.0f32; num_vectors];
         dev.dtoh_sync_copy_into(&distances_dev, &mut distances_host)?;
 
-        // Utiliser un max-heap pour sélectionner les `k` vecteurs les plus proches sur le CPU
         let mut heap: BinaryHeap<(FloatOrd, usize)> = BinaryHeap::with_capacity(k);
-
+        // println!("compare to GPU");
         for (index, &distance) in distances_host.iter().enumerate() {
             let ord_dist = FloatOrd(distance);
+            // println!("{},{}", index, dist);
+            // println!("{},{:#?}", index, ord_dist);
+    
             if heap.len() < k {
                 heap.push((ord_dist, index));
             } else if let Some(&(FloatOrd(top_dist), _)) = heap.peek() {
@@ -487,8 +661,7 @@ mod gpu_optimisation {
             }
         }
 
-        // Extraire les résultats du heap
-        let result: Vec<(&[f32], usize)> = heap
+        let result: Vec<(&'a [f32], usize)> = heap
             .into_iter()
             .map(|(_, index)| (&database[index][..], index))
             .collect();
@@ -497,13 +670,12 @@ mod gpu_optimisation {
     }
 
     #[cfg(feature = "cuda")]
-    fn cuda_build_kd_tree<'a>(subset: &mut [(&'a [f32], usize)],
+    fn cuda_build_kd_tree<'a>(
+        subset: &mut [(&'a [f32], usize)],
         dev: &Arc<CudaDevice>,
         funcs: &mut HashMap<&'static str, CudaFunction>,
     ) -> Option<Box<KDNode<'a>>> {
-        // Logique CUDA pour construire l'arbre KD
-        // ...
-        None // Retourner l'arbre KD construit sur le GPU
+        None
     }
 
     #[cfg(feature = "cuda")]
@@ -514,8 +686,6 @@ mod gpu_optimisation {
         dev: &Arc<CudaDevice>,
         funcs: &mut HashMap<&'static str, CudaFunction>,
     ) -> anyhow::Result<()> {
-        // Logique CUDA pour la recherche des plus proches voisins
-        // ...
         Ok(())
     }
 }
