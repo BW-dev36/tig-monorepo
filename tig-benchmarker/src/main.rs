@@ -285,13 +285,24 @@ async fn master_node(
         let optimised_algos = match benchmarker::algo_selection::select_algorithms_to_run(
             &player_id.clone(),
             &selection,
+            duration,
+            25000,
         )
         .await
         {
-            Ok(selected_algos) if !selected_algos.is_empty() => selected_algos,
+            Ok(selected_algos) => {
+                if !selected_algos.0.is_empty() {
+                    println!(
+                        "Automatically switch to algos '{:?}' with duration {:?} ",
+                        selected_algos.0, selected_algos.1
+                    );
+                    selected_algos.0
+                } else {
+                    selection.clone()
+                }
+            }
             _ => selection.clone(),
         };
-        println!("Automatically switch to algos: {:?}", optimised_algos);
 
         for (challenge_id, algorithm_id) in optimised_algos {
             benchmarker::select_algorithm(challenge_id, algorithm_id).await;

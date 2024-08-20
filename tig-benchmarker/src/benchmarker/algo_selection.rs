@@ -7,7 +7,9 @@ use std::error::Error;
 pub async fn select_algorithms_to_run(
     player_id: &str,
     algo_selection: &HashMap<String, String>,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    original_duration: u32,
+    new_duration: u32,
+) -> Result<(HashMap<String, String>, u32), Box<dyn Error>> {
     let mut algo_map = HashMap::new();
     algo_map.insert("c001".to_string(), "satisfiability".to_string());
     algo_map.insert("c002".to_string(), "vehicle_routing".to_string());
@@ -17,11 +19,12 @@ pub async fn select_algorithms_to_run(
     let solutions = fetch_solutions(player_id).await?;
     let algos_to_run = determine_algorithms_to_run(&solutions, &algo_map, 10.0);
     let config = generate_algo_map(&algos_to_run, algo_selection);
+    let duration = calculate_duration(&config, &algo_map, original_duration, new_duration);
 
     if config.is_empty() {
-        Ok(algo_selection.clone())
+        Ok((algo_selection.clone(), original_duration))
     } else {
-        Ok(config)
+        Ok((config, duration))
     }
 }
 
@@ -96,4 +99,17 @@ fn generate_algo_map(
     }
 
     config
+}
+
+fn calculate_duration(
+    config: &HashMap<String, String>,
+    algo_map: &HashMap<String, String>,
+    original_duration: u32,
+    new_duration: u32,
+) -> u32 {
+    let mut duration = original_duration;
+    if config.len() != algo_map.len() {
+        duration = new_duration;
+    }
+    duration
 }
