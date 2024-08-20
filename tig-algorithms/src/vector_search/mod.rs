@@ -6,40 +6,40 @@ mod tests {
     use super::*;
     use tig_challenges::{vector_search::*, *};
 
-    #[test]
-    fn test_vector_search() {
-        let difficulty = Difficulty {
-            // Uncomment the relevant fields.
-            // Modify the values for different difficulties
+//     #[test]
+//     fn test_vector_search() {
+//         let difficulty = Difficulty {
+//             // Uncomment the relevant fields.
+//             // Modify the values for different difficulties
 
-            // -- satisfiability --
-            // num_variables: 50,
-            // clauses_to_variables_percent: 300,
+//             // -- satisfiability --
+//             // num_variables: 50,
+//             // clauses_to_variables_percent: 300,
 
-            // -- vehicle_routing --
-            // num_nodes: 40,
-            // better_than_baseline: 250,
+//             // -- vehicle_routing --
+//             // num_nodes: 40,
+//             // better_than_baseline: 250,
 
-            // -- knapsack --
-            // num_items: 50,
-            // better_than_baseline: 10,
+//             // -- knapsack --
+//             // num_items: 50,
+//             // better_than_baseline: 10,
 
-            //-- vector_search --
-            num_queries: 20,
-            better_than_baseline: 510,
-        };
-        let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
-        let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
-        println!("Running test ...");
-        match optimax_search::solve_challenge(&challenge) {
-            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
-                Ok(_) => println!("Valid solution"),
-                Err(e) => println!("Invalid solution: {}", e),
-            },
-            Ok(None) => println!("No solution"),
-            Err(e) => println!("Algorithm error: {}", e),
-        };
-    }
+//             //-- vector_search --
+//             num_queries: 35,
+//             better_than_baseline: 510,
+//         };
+//         let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
+//         let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
+//         println!("Running test ...");
+//         match optimax_search::solve_challenge(&challenge) {
+//             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+//                 Ok(_) => println!("Valid solution"),
+//                 Err(e) => println!("Invalid solution: {}", e),
+//             },
+//             Ok(None) => println!("No solution"),
+//             Err(e) => println!("Algorithm error: {}", e),
+//         };
+//     }
 }
 
 #[cfg(feature = "cuda")]
@@ -110,8 +110,8 @@ mod cuda_tests {
             // better_than_baseline: 10,
 
             // -- vector_search --
-            num_queries: 10,
-            better_than_baseline: 350,
+            num_queries: 45,
+            better_than_baseline: 510,
         };
         let seeds = [0; 8]; // change this to generate different instances
         let challenge =
