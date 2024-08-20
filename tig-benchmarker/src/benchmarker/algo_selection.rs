@@ -15,7 +15,7 @@ pub async fn select_algorithms_to_run(
     algo_map.insert("c004".to_string(), "vector_search".to_string());
 
     let solutions = fetch_solutions(player_id).await?;
-    let algos_to_run = determine_algorithms_to_run(&solutions, &algo_map, 1.5, 10.0);
+    let algos_to_run = determine_algorithms_to_run(&solutions, &algo_map, 10.0);
     let config = generate_algo_map(&algos_to_run, algo_selection);
 
     if config.is_empty() {
@@ -39,13 +39,13 @@ async fn fetch_solutions(player_id: &str) -> Result<HashMap<String, u32>, Box<dy
     let query_data = query_data::execute().await?;
     for challenge in query_data.algorithms_by_challenge {
         for algo in challenge.1 {
-            if let Some(num_qualifiers) =
-                algo.block_data().num_qualifiers_by_player().get(player_id)
-            {
-                let entry = solutions
-                    .entry(algo.details.challenge_id.clone())
-                    .or_insert(0);
-                *entry += num_qualifiers;
+            if let Some(block_data) = algo.block_data {
+                if let Some(num_qualifiers) = block_data.num_qualifiers_by_player().get(player_id) {
+                    let entry = solutions
+                        .entry(algo.details.challenge_id.clone())
+                        .or_insert(0);
+                    *entry += num_qualifiers;
+                }
             }
         }
     }
@@ -56,7 +56,6 @@ async fn fetch_solutions(player_id: &str) -> Result<HashMap<String, u32>, Box<dy
 fn determine_algorithms_to_run(
     solutions: &HashMap<String, u32>,
     algo_map: &HashMap<String, String>,
-    cutoff_multiplier: f32,
     tolerance_percentage: f32,
 ) -> Vec<String> {
     let total_solutions: f32 = solutions.values().sum::<u32>() as f32;
@@ -79,10 +78,7 @@ fn determine_algorithms_to_run(
 
     if algos_to_run.is_empty() {
         let least_solutions = *solutions.values().min().unwrap_or(&0);
-        let cutoff = cmp::max(
-            3,
-            ((least_solutions as f32) * cutoff_multiplier).ceil() as u32,
-        );
+        let cutoff = cmp::max(3, ((least_solutions as f32) * 1.5).ceil() as u32);
 
         for (challenge, algo) in algo_map {
             let count = solutions.get(challenge).cloned().unwrap_or(0);
