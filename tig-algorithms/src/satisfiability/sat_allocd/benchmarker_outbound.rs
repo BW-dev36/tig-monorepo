@@ -5,260 +5,87 @@ Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); y
 may not use this file except in compliance with the License. You may obtain a copy 
 of the License at
 
-https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
+https:
 
 Unless required by applicable law or agreed to in writing, software distributed
 under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
 language governing permissions and limitations under the License.
 */
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::collections::HashMap;
-use tig_challenges::satisfiability::*;
+
+use std::slice;
+
+#[repr(C)]
+pub struct CChallenge {
+    pub seed: u64,
+    pub num_variables: i32,
+    pub clauses: *mut i32,
+    pub clause_lengths: *mut i32,
+    pub num_clauses: i32,
+}
+
+#[repr(C)]
+pub struct CSolution {
+    pub variables: *mut bool,
+    pub num_variables: i32,
+}
+
+extern "C" {
+    fn solve_sprint_sat_v2_cpp(challenge: *const CChallenge, solution: *mut CSolution);
+}
+
+
+use tig_challenges::satisfiability::{Challenge, Solution};
+
+fn challenge_to_c(challenge: &Challenge) -> (CChallenge, Vec<i32>, Vec<i32>) {
+    let mut flat_clauses: Vec<i32> = Vec::new();
+    let mut clause_lengths: Vec<i32> = Vec::new();
+
+    for clause in &challenge.clauses {
+        clause_lengths.push(clause.len() as i32);
+        flat_clauses.extend(clause);
+    }
+
+    let c_challenge = CChallenge {
+        seed: challenge.seeds[0],
+        num_variables: challenge.difficulty.num_variables as i32, 
+        clauses: flat_clauses.as_mut_ptr(),
+        clause_lengths: clause_lengths.as_mut_ptr(),
+        num_clauses: challenge.clauses.len() as i32,
+    };
+
+    (c_challenge, flat_clauses, clause_lengths)
+}
+
+fn solution_from_c(c_solution: &CSolution) -> Solution {
+    let variables = unsafe {
+        slice::from_raw_parts(c_solution.variables, c_solution.num_variables as usize).to_vec()
+    };
+    Solution { variables }
+}
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    let mut rng = StdRng::seed_from_u64(challenge.seeds[0] as u64);
+    let mut solution_variables = vec![false; challenge.clauses.len()];
+    let mut c_solution = CSolution {
+        variables: solution_variables.as_mut_ptr(),
+        num_variables: challenge.difficulty.num_variables as i32,
+    };
 
-    let mut p_single = vec![false; challenge.difficulty.num_variables];
-    let mut n_single = vec![false; challenge.difficulty.num_variables];
-
-    let mut clauses_ = challenge.clauses.clone();
-    let mut clauses: Vec<Vec<i32>> = Vec::with_capacity(clauses_.len());
-
-    let mut rounds = 0;
-
-    let mut dead = false;
-
-    while !(dead) {
-        let mut done = true;
-        for c in &clauses_ {
-            let mut c_: Vec<i32> = Vec::with_capacity(c.len()); // Preallocate with capacity
-            let mut skip = false;
-            for (i, l) in c.iter().enumerate() {
-                if (p_single[(l.abs() - 1) as usize] && *l > 0)
-                    || (n_single[(l.abs() - 1) as usize] && *l < 0)
-                    || c[(i + 1)..].contains(&-l)
-                {
-                    skip = true;
-                    break;
-                } else if p_single[(l.abs() - 1) as usize]
-                    || n_single[(l.abs() - 1) as usize]
-                    || c[(i + 1)..].contains(&l)
-                {
-                    done = false;
-                    continue;
-                } else {
-                    c_.push(*l);
-                }
-            }
-            if skip {
-                done = false;
-                continue;
-            };
-            match c_[..] {
-                [l] => {
-                    done = false;
-                    if l > 0 {
-                        if n_single[(l.abs() - 1) as usize] {
-                            dead = true;
-                            break;
-                        } else {
-                            p_single[(l.abs() - 1) as usize] = true;
-                        }
-                    } else {
-                        if p_single[(l.abs() - 1) as usize] {
-                            dead = true;
-                            break;
-                        } else {
-                            n_single[(l.abs() - 1) as usize] = true;
-                        }
-                    }
-                }
-                [] => {
-                    dead = true;
-                    break;
-                }
-                _ => {
-                    clauses.push(c_);
-                }
-            }
-        }
-        if done {
-            break;
-        } else {
-            clauses_ = clauses;
-            clauses = Vec::with_capacity(clauses_.len());
-        }
+    let (c_challenge, _flat_clauses, _clause_lengths) = challenge_to_c(challenge);
+    
+    unsafe {
+        solve_sprint_sat_v2_cpp(&c_challenge, &mut c_solution);
     }
 
-    if dead {
-        return Ok(None);
+    
+    let solution = solution_from_c(&c_solution);
+
+    
+    if solution.variables.iter().all(|&x| !x) {
+        Ok(None)
+    } else {
+        Ok(Some(solution))
     }
-
-    let num_variables = challenge.difficulty.num_variables;
-    let num_clauses = clauses.len();
-
-    let mut p_clauses: Vec<Vec<usize>> = vec![Vec::new(); num_variables];
-    let mut n_clauses: Vec<Vec<usize>> = vec![Vec::new(); num_variables];
-
-    let mut variables = vec![false; num_variables];
-    for v in 0..num_variables {
-        if p_single[v] {
-            variables[v] = true
-        } else if n_single[v] {
-            variables[v] = false
-        } else {
-            variables[v] = rng.gen_bool(0.5)
-        }
-    }
-    let mut num_good_so_far: Vec<usize> = vec![0; num_clauses];
-
-    // Preallocate capacity for p_clauses and n_clauses
-    for c in &clauses {
-        for &l in c {
-            let var = (l.abs() - 1) as usize;
-            if l > 0 {
-                if p_clauses[var].capacity() == 0 {
-                    p_clauses[var] = Vec::with_capacity(clauses.len() / num_variables + 1);
-                }
-            } else {
-                if n_clauses[var].capacity() == 0 {
-                    n_clauses[var] = Vec::with_capacity(clauses.len() / num_variables + 1);
-                }
-            }
-        }
-    }
-
-    for (i, &ref c) in clauses.iter().enumerate() {
-        for &l in c {
-            let var = (l.abs() - 1) as usize;
-            if l > 0 {
-                p_clauses[var].push(i);
-                if variables[var] {
-                    num_good_so_far[i] += 1
-                }
-            } else {
-                n_clauses[var].push(i);
-                if !variables[var] {
-                    num_good_so_far[i] += 1
-                }
-            }
-        }
-    }
-
-    let mut residual_ = Vec::with_capacity(num_clauses);
-    let mut residual_indices = HashMap::with_capacity(num_clauses);
-
-    for (i, &num_good) in num_good_so_far.iter().enumerate() {
-        if num_good == 0 {
-            residual_.push(i);
-            residual_indices.insert(i, residual_.len() - 1);
-        }
-    }
-
-    loop {
-        if !residual_.is_empty() {
-            let i = residual_[0];
-            let mut min_sad = clauses.len();
-            let mut v_min_sad = Vec::with_capacity(clauses[i].len()); // Preallocate with capacity
-            let c = &clauses[i];
-            for &l in c {
-                let mut sad = 0 as usize;
-                if variables[(l.abs() - 1) as usize] {
-                    for &c in &p_clauses[(l.abs() - 1) as usize] {
-                        if num_good_so_far[c] == 1 {
-                            sad += 1;
-                            if sad > min_sad {
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    for &c in &n_clauses[(l.abs() - 1) as usize] {
-                        if num_good_so_far[c] == 1 {
-                            sad += 1;
-                            if sad > min_sad {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if sad < min_sad {
-                    min_sad = sad;
-                    v_min_sad.clear();
-                    v_min_sad.push((l.abs() - 1) as usize);
-                } else if sad == min_sad {
-                    v_min_sad.push((l.abs() - 1) as usize);
-                }
-            }
-            let v = if min_sad == 0 {
-                if v_min_sad.len() == 1 {
-                    v_min_sad[0]
-                } else {
-                    v_min_sad[rng.gen_range(0..(v_min_sad.len() as u32)) as usize]
-                }
-            } else {
-                if rng.gen_bool(0.5) {
-                    let l = c[rng.gen_range(0..(c.len() as u32)) as usize];
-                    (l.abs() - 1) as usize
-                } else {
-                    v_min_sad[rng.gen_range(0..(v_min_sad.len() as u32)) as usize]
-                }
-            };
-
-            if variables[v] {
-                for &c in &n_clauses[v] {
-                    num_good_so_far[c] += 1;
-                    if num_good_so_far[c] == 1 {
-                        let i = residual_indices.remove(&c).unwrap();
-                        let last = residual_.pop().unwrap();
-                        if i < residual_.len() {
-                            residual_[i] = last;
-                            residual_indices.insert(last, i);
-                        }
-                    }
-                }
-                for &c in &p_clauses[v] {
-                    if num_good_so_far[c] == 1 {
-                        residual_.push(c);
-                        residual_indices.insert(c, residual_.len() - 1);
-                    }
-                    num_good_so_far[c] -= 1;
-                }
-            } else {
-                for &c in &n_clauses[v] {
-                    if num_good_so_far[c] == 1 {
-                        residual_.push(c);
-                        residual_indices.insert(c, residual_.len() - 1);
-                    }
-                    num_good_so_far[c] -= 1;
-                }
-
-                for &c in &p_clauses[v] {
-                    num_good_so_far[c] += 1;
-                    if num_good_so_far[c] == 1 {
-                        let i = residual_indices.remove(&c).unwrap();
-                        let last = residual_.pop().unwrap();
-                        if i < residual_.len() {
-                            residual_[i] = last;
-                            residual_indices.insert(last, i);
-                        }
-                    }
-                }
-            }
-
-            variables[v] = !variables[v];
-        } else {
-            break;
-        }
-        rounds += 1;
-        if rounds >= num_variables * 35 {
-            return Ok(None);
-        }
-    }
-
-    return Ok(Some(Solution { variables }));
 }
 
 #[cfg(feature = "cuda")]
@@ -268,10 +95,10 @@ mod gpu_optimisation {
     use std::{collections::HashMap, sync::Arc};
     use tig_challenges::CudaKernel;
 
-    // set KERNEL to None if algorithm only has a CPU implementation
+    
     pub const KERNEL: Option<CudaKernel> = None;
 
-    // Important! your GPU and CPU version of the algorithm should return the same result
+    
     pub fn cuda_solve_challenge(
         challenge: &Challenge,
         dev: &Arc<CudaDevice>,

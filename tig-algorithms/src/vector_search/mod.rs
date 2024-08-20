@@ -1,4 +1,34 @@
-pub mod optimax_search;
+// c004_a001
+
+// c004_a002
+
+// c004_a003
+
+// c004_a004
+
+// c004_a005
+
+// c004_a006
+
+// c004_a007
+
+// c004_a008
+
+// c004_a009
+
+// c004_a010
+
+// c004_a011
+
+// c004_a012
+
+// c004_a013
+
+pub mod brute_force_bacalhau;
+pub use brute_force_bacalhau as c004_a014;
+
+
+pub mod optimax_gpu;
 
 
 #[cfg(test)]
@@ -6,40 +36,40 @@ mod tests {
     use super::*;
     use tig_challenges::{vector_search::*, *};
 
-//     #[test]
-//     fn test_vector_search() {
-//         let difficulty = Difficulty {
-//             // Uncomment the relevant fields.
-//             // Modify the values for different difficulties
+    #[test]
+    fn test_vector_search() {
+        let difficulty = Difficulty {
+            // Uncomment the relevant fields.
+            // Modify the values for different difficulties
 
-//             // -- satisfiability --
-//             // num_variables: 50,
-//             // clauses_to_variables_percent: 300,
+            // -- satisfiability --
+            // num_variables: 50,
+            // clauses_to_variables_percent: 300,
 
-//             // -- vehicle_routing --
-//             // num_nodes: 40,
-//             // better_than_baseline: 250,
+            // -- vehicle_routing --
+            // num_nodes: 40,
+            // better_than_baseline: 250,
 
-//             // -- knapsack --
-//             // num_items: 50,
-//             // better_than_baseline: 10,
+            // -- knapsack --
+            // num_items: 50,
+            // better_than_baseline: 10,
 
-//             //-- vector_search --
-//             num_queries: 35,
-//             better_than_baseline: 510,
-//         };
-//         let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
-//         let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
-//         println!("Running test ...");
-//         match optimax_search::solve_challenge(&challenge) {
-//             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
-//                 Ok(_) => println!("Valid solution"),
-//                 Err(e) => println!("Invalid solution: {}", e),
-//             },
-//             Ok(None) => println!("No solution"),
-//             Err(e) => println!("Algorithm error: {}", e),
-//         };
-//     }
+            //-- vector_search --
+            num_queries: 45,
+            better_than_baseline: 520,
+        };
+        let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
+        let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
+        println!("Running test ...");
+        match optimax_gpu::solve_challenge(&challenge) {
+            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+                Ok(_) => println!("Valid solution"),
+                Err(e) => println!("Invalid solution: {}", e),
+            },
+            Ok(None) => println!("No solution"),
+            Err(e) => println!("Algorithm error: {}", e),
+        };
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -110,14 +140,14 @@ mod cuda_tests {
             // better_than_baseline: 10,
 
             // -- vector_search --
-            num_queries: 45,
-            better_than_baseline: 510,
+            num_queries: 10,
+            better_than_baseline: 350,
         };
         let seeds = [0; 8]; // change this to generate different instances
         let challenge =
             Challenge::cuda_generate_instance(seeds, &difficulty, &dev, challenge_cuda_funcs)
                 .unwrap();
-        match optimax_search::cuda_solve_challenge(&challenge, &dev, algorithm_cuda_funcs) {
+        match optimax_gpu::cuda_solve_challenge(&challenge, &dev, algorithm_cuda_funcs) {
             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                 Ok(_) => println!("Valid solution"),
                 Err(e) => println!("Invalid solution: {}", e),
@@ -127,39 +157,9 @@ mod cuda_tests {
         };
     }
 }
-// c004_a001
-
-// c004_a002
-
-// c004_a003
-
-// c004_a004
-
-// c004_a005
-
-// c004_a006
-
-// c004_a007
-
-// c004_a008
-
-// c004_a009
-
-// c004_a010
-
-// c004_a011
-
-// c004_a012
-
-// c004_a013
-
-pub mod brute_force_bacalhau;
-pub use brute_force_bacalhau as c004_a014;
-
 // c004_a015
 
-pub mod fast_search;
-pub use fast_search as c004_a016;
+// c004_a016
 
 // c004_a017
 

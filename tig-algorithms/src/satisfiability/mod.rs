@@ -23,9 +23,100 @@ pub use walk_sat as c001_a005;
 pub mod fast_walk_sat;
 pub use fast_walk_sat as c001_a011;
 
+
 pub mod sprint_sat;
 pub use sprint_sat as c001_a012;
 
+pub mod sat_allocd;
+pub use sat_allocd as c001_a023;
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tig_challenges::{satisfiability::*, *};
+
+    #[test]
+    fn test_sprint_sat() {
+        let difficulty = Difficulty {
+            // Uncomment the relevant fields.
+            // Modify the values for different difficulties
+
+            // -- satisfiability --
+            num_variables: 1194,
+            clauses_to_variables_percent: 426,
+
+            // -- vehicle_routing --
+            // num_nodes: 40,
+            // better_than_baseline: 250,
+            // -- knapsack --
+            // num_items: 20,
+            // better_than_baseline: 5,
+        };
+        let seed = [333598156; 8]; // change this to generate different instances
+        let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
+        match sat_allocd::solve_challenge(&challenge) {
+            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+                Ok(_) => println!("3SAT Valid solution test_sprint_sat "),
+                Err(e) => println!("3SAT Invalid solution: {}", e),
+            },
+            Ok(None) => println!("3SAT No solution"),
+            Err(e) => println!("3SAT Algorithm error: {}", e),
+        };
+    }
+
+// use std::sync::Arc;
+// use std::sync::Mutex;
+// use std::thread;
+
+//     #[test]
+//     fn test_sat_multithreaded() {
+//         let difficulty = Difficulty {
+//             num_variables: 1194,
+//             clauses_to_variables_percent: 426,
+
+//         };
+
+//         let num_threads = 1;
+//         let challenges_per_thread = 1;
+
+//         // Shared counter to track progress
+//         let counter = Arc::new(Mutex::new(0));
+
+//         let threads: Vec<_> = (0..num_threads)
+//             .map(|_| {
+//                 let counter = Arc::clone(&counter);
+//                 let difficulty = difficulty.clone(); // Clone the difficulty for each thread
+
+//                 thread::spawn(move || {
+//                     for seed in 0..challenges_per_thread {
+//                         let challenge = Challenge::generate_instance([333598156; 8], &difficulty).unwrap();
+
+//                         match sprint_sat::solve_challenge(&challenge) {
+//                             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+//                                 Ok(_) => {
+//                                     let mut count = counter.lock().unwrap();
+//                                     *count += 1;
+
+//                                     println!("3-SAT Thread {}: Valid solution ({}/{})", seed, *count, num_threads * challenges_per_thread);
+//                                 }
+//                                 Err(e) => println!("3-SAT Thread {}: Invalid solution: {}", seed, e),
+//                             },
+//                             Ok(None) => {},
+//                             Err(e) => println!("3-SAT Thread {}: Algorithm error: {}", seed, e),
+//                         };
+//                         break;
+//                     }
+//                 })
+//             })
+//             .collect();
+
+//         for t in threads {
+//             t.join().unwrap();
+//         }
+
+//     }
+}
 // c001_a013
 
 // c001_a014
@@ -47,8 +138,6 @@ pub use inbound as c001_a018;
 
 // c001_a022
 
-pub mod sat_allocd;
-pub use sat_allocd as c001_a023;
 
 // c001_a024
 
