@@ -25,14 +25,6 @@ pub async fn select_algorithms_to_run(
     }
 }
 
-async fn fetch_block_id() -> Result<Option<String>, Box<dyn Error>> {
-    let block_response: Value = reqwest::get("https://mainnet-api.tig.foundation/get-block")
-        .await?
-        .json()
-        .await?;
-    Ok(block_response["block"]["id"].as_str().map(String::from))
-}
-
 async fn fetch_solutions(player_id: &str) -> Result<HashMap<String, u32>, Box<dyn Error>> {
     let mut solutions: HashMap<String, u32> = HashMap::new();
 
