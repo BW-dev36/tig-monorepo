@@ -17,7 +17,7 @@ use crate::future_utils::{sleep, spawn, time, Mutex};
 use difficulty_sampler::DifficultySampler;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tig_api::Api;
 use tig_structs::{
     config::{MinMaxDifficulty, WasmVMConfig},
@@ -491,4 +491,9 @@ pub async fn setup(api_url: String, api_key: String, player_id: String) {
             submission_errors: HashMap::new(),
         })
     });
+}
+
+pub async fn update_benchmark_duration(duration: u32) {
+    let mut state = (*state()).lock().await;
+    state.ms_per_benchmark = Some(duration);
 }

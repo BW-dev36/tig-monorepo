@@ -291,6 +291,7 @@ async fn master_node(
         .await
         {
             Ok(selected_algos) => {
+                benchmarker::update_benchmark_duration(selected_algos.1).await;
                 if !selected_algos.0.is_empty() {
                     println!(
                         "Automatically switch to algos '{:?}' with duration {:?} ",
@@ -301,7 +302,10 @@ async fn master_node(
                     selection.clone()
                 }
             }
-            _ => selection.clone(),
+            _ => {
+                benchmarker::update_benchmark_duration(duration).await;
+                selection.clone()
+            }
         };
 
         for (challenge_id, algorithm_id) in optimised_algos {
