@@ -1,3 +1,4 @@
+use super::query_data;
 use serde_json::{self, Value};
 use std::cmp;
 use std::collections::HashMap;
@@ -13,18 +14,14 @@ pub async fn select_algorithms_to_run(
     algo_map.insert("c003".to_string(), "knapsack".to_string());
     algo_map.insert("c004".to_string(), "vector_search".to_string());
 
-    if let Some(block_id) = fetch_block_id().await? {
-        let solutions = fetch_solutions(player_id, &block_id).await?;
-        let algos_to_run = determine_algorithms_to_run(&solutions, &algo_map, 1.5);
-        let config = generate_algo_map(&algos_to_run, algo_selection);
+    let solutions = fetch_solutions(player_id).await?;
+    let algos_to_run = determine_algorithms_to_run(&solutions, &algo_map, 1.5, 10.0);
+    let config = generate_algo_map(&algos_to_run, algo_selection);
 
-        if config.is_empty() {
-            Ok(algo_selection.clone())
-        } else {
-            Ok(config)
-        }
-    } else {
+    if config.is_empty() {
         Ok(algo_selection.clone())
+    } else {
+        Ok(config)
     }
 }
 
@@ -36,27 +33,19 @@ async fn fetch_block_id() -> Result<Option<String>, Box<dyn Error>> {
     Ok(block_response["block"]["id"].as_str().map(String::from))
 }
 
-async fn fetch_solutions(
-    player_id: &str,
-    block_id: &str,
-) -> Result<HashMap<String, i32>, Box<dyn Error>> {
-    let mut solutions: HashMap<String, i32> = HashMap::new();
+async fn fetch_solutions(player_id: &str) -> Result<HashMap<String, u32>, Box<dyn Error>> {
+    let mut solutions: HashMap<String, u32> = HashMap::new();
 
-    let url = format!(
-        "https://mainnet-api.tig.foundation/get-algorithms?block_id={}",
-        block_id
-    );
-    let response: Value = reqwest::get(&url).await?.json().await?;
-
-    if let Some(algorithms) = response["algorithms"].as_array() {
-        for algo in algorithms {
-            if let Some(challenge_id) = algo["details"]["challenge_id"].as_str() {
-                if let Some(num_qualifiers) =
-                    algo["block_data"]["num_qualifiers_by_player"][player_id].as_i64()
-                {
-                    let entry = solutions.entry(challenge_id.to_string()).or_insert(0);
-                    *entry += num_qualifiers as i32;
-                }
+    let query_data = query_data::execute().await?;
+    for challenge in query_data.algorithms_by_challenge {
+        for algo in challenge.1 {
+            if let Some(num_qualifiers) =
+                algo.block_data().num_qualifiers_by_player().get(player_id)
+            {
+                let entry = solutions
+                    .entry(algo.details.challenge_id.clone())
+                    .or_insert(0);
+                *entry += num_qualifiers;
             }
         }
     }
@@ -65,21 +54,39 @@ async fn fetch_solutions(
 }
 
 fn determine_algorithms_to_run(
-    solutions: &HashMap<String, i32>,
+    solutions: &HashMap<String, u32>,
     algo_map: &HashMap<String, String>,
-    cutoff_multiplier: f64,
+    cutoff_multiplier: f32,
+    tolerance_percentage: f32,
 ) -> Vec<String> {
-    let least_solutions = *solutions.values().min().unwrap_or(&0);
+    let total_solutions: f32 = solutions.values().sum::<u32>() as f32;
+    let num_challenges = algo_map.len() as f32;
 
-    let cutoff = cmp::max(
-        3,
-        ((least_solutions as f64) * cutoff_multiplier).ceil() as i32,
-    );
+    if num_challenges == 0.0 {
+        return Vec::new();
+    }
 
-    let mut algos_to_run = vec![];
-    for (challenge, &count) in solutions {
-        if count < cutoff {
-            if let Some(algo) = algo_map.get(challenge) {
+    let average_solutions = total_solutions / num_challenges;
+    let threshold = (average_solutions * (1.0 - tolerance_percentage / 100.0)) as u32;
+
+    let mut algos_to_run = Vec::new();
+    for (challenge, algo) in algo_map {
+        let count = solutions.get(challenge).cloned().unwrap_or(0);
+        if count < threshold {
+            algos_to_run.push(algo.clone());
+        }
+    }
+
+    if algos_to_run.is_empty() {
+        let least_solutions = *solutions.values().min().unwrap_or(&0);
+        let cutoff = cmp::max(
+            3,
+            ((least_solutions as f32) * cutoff_multiplier).ceil() as u32,
+        );
+
+        for (challenge, algo) in algo_map {
+            let count = solutions.get(challenge).cloned().unwrap_or(0);
+            if count < cutoff {
                 algos_to_run.push(algo.clone());
             }
         }
