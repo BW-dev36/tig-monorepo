@@ -1,8 +1,8 @@
 /*!
 Copyright 2024 Louis Silva
 
-Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); you 
-may not use this file except in compliance with the License. You may obtain a copy 
+Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); you
+may not use this file except in compliance with the License. You may obtain a copy
 of the License at
 
 https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
@@ -16,80 +16,79 @@ language governing permissions and limitations under the License.
 use anyhow::Result;
 
 use tig_challenges::vector_search::*;
+#[repr(C)]
+pub struct VSChallenge {
+    vector_database: *const f32, // Pointeur vers les données des vecteurs dans la base
+    vector_database_len: usize,  // Nombre total d'éléments dans la base
+    vector_sizes: *const usize,  // Taille de chaque vecteur dans la base
+    num_vectors: usize,          // Nombre de vecteurs dans la base
 
-#[inline]
-fn l2_norm(x: &[f32]) -> f32 {
-    x.iter().map(|&val| val * val).sum::<f32>().sqrt()
+    query_vectors: *const f32, // Pointeur vers les données des vecteurs de requête
+    query_vectors_len: usize,  // Nombre total d'éléments de requête
+    query_sizes: *const usize, // Taille de chaque vecteur de requête
+    num_queries: usize,        // Nombre de vecteurs de requête
+
+    max_distance: f32,
 }
 
-#[inline]
-fn euclidean_distance_with_precomputed_norm(
-    a_norm_sq: f32,
-    b_norm_sq: f32,
-    ab_dot_product: f32
-) -> f32 {
-    (a_norm_sq + b_norm_sq - 2.0 * ab_dot_product).sqrt()
+#[repr(C)]
+pub struct VSSolution {
+    indexes: *mut usize, // Pointeur vers les indices des solutions trouvées
+    len: usize,          // Nombre d'indices trouvés
+}
+
+extern "C" {
+    fn solve_bacalhau_v1_cpp(challenge: *const VSChallenge, solution: *mut VSSolution);
 }
 
 pub fn solve_challenge(challenge: &Challenge) -> Result<Option<Solution>> {
-    let vector_database: &Vec<Vec<f32>> = &challenge.vector_database;
-    let query_vectors: &Vec<Vec<f32>> = &challenge.query_vectors;
-    let max_distance: f32 = challenge.max_distance;
+    // Préparer les données pour l'interface C
+    let vector_database: Vec<f32> = challenge
+        .vector_database
+        .iter()
+        .flatten()
+        .copied()
+        .collect();
+    let vector_sizes: Vec<usize> = challenge.vector_database.iter().map(|v| v.len()).collect();
 
-    let mut indexes: Vec<usize> = Vec::with_capacity(query_vectors.len());
-    let mut vector_norms_sq: Vec<f32> = Vec::with_capacity(vector_database.len());
+    let query_vectors: Vec<f32> = challenge.query_vectors.iter().flatten().copied().collect();
+    let query_sizes: Vec<usize> = challenge.query_vectors.iter().map(|v| v.len()).collect();
 
-    let mut sum_norms_sq: f32 = 0.0;
-    let mut sum_squares: f32 = 0.0;
+    let vs_challenge = VSChallenge {
+        vector_database: vector_database.as_ptr(),
+        vector_database_len: vector_database.len(),
+        vector_sizes: vector_sizes.as_ptr(),
+        num_vectors: vector_sizes.len(),
 
-    for vector in vector_database {
-        let norm_sq: f32 = vector.iter().map(|&val| val * val).sum();
-        sum_norms_sq += norm_sq.sqrt();
-        sum_squares += norm_sq;
-        vector_norms_sq.push(norm_sq);
+        query_vectors: query_vectors.as_ptr(),
+        query_vectors_len: query_vectors.len(),
+        query_sizes: query_sizes.as_ptr(),
+        num_queries: query_sizes.len(),
+
+        max_distance: challenge.max_distance,
+    };
+
+    // Préparer un vecteur pour les résultats
+    let mut indexes: Vec<usize> = vec![0; challenge.query_vectors.len()];
+
+    let mut vs_solution = VSSolution {
+        indexes: indexes.as_mut_ptr(),
+        len: 0,
+    };
+
+    // Appeler la fonction C++
+    unsafe {
+        solve_bacalhau_v1_cpp(&vs_challenge, &mut vs_solution);
     }
 
-    let vector_norms_len: f32 = vector_norms_sq.len() as f32;
-    let std_dev: f32 = ((sum_squares / vector_norms_len) - (sum_norms_sq / vector_norms_len).powi(2)).sqrt();
-    let norm_threshold: f32 = 2.0 * std_dev;
-
-    for query in query_vectors {
-        let query_norm_sq: f32 = query.iter().map(|&val| val * val).sum();
-
-        let mut closest_index: Option<usize> = None;
-        let mut closest_distance: f32 = f32::MAX;
-
-        for (idx, vector) in vector_database.iter().enumerate() {
-            let vector_norm_sq = vector_norms_sq[idx];
-            if ((vector_norm_sq.sqrt() - query_norm_sq.sqrt()).abs()) > norm_threshold {
-                continue;
-            }
-
-            let ab_dot_product: f32 = query.iter().zip(vector).map(|(&x1, &x2)| x1 * x2).sum();
-            let distance: f32 = euclidean_distance_with_precomputed_norm(
-                query_norm_sq,
-                vector_norm_sq,
-                ab_dot_product,
-            );
-
-            if distance <= max_distance {
-                closest_index = Some(idx);
-                break; // Early exit
-            } else if distance < closest_distance {
-                closest_index = Some(idx);
-                closest_distance = distance;
-            }
-        }
-
-        if let Some(index) = closest_index {
-            indexes.push(index);
-        } else {
-            return Ok(None);
-        }
+    if vs_solution.len == 0 {
+        Ok(None)
+    } else {
+        indexes.truncate(vs_solution.len);
+        Ok(Some(Solution { indexes }))
     }
-
-    Ok(Some(Solution { indexes }))
 }
+
 #[cfg(feature = "cuda")]
 mod gpu_optimisation {
     use super::*;
