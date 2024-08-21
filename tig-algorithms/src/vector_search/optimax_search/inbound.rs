@@ -333,7 +333,7 @@ mod gpu_optimisation {
         
         "#,
 
-        funcs: &["filter_vectors", "build_kd_tree", "nearest_neighbor_search"],
+        funcs: &["filter_vectors"],
     });
 
     pub fn cuda_solve_challenge(
