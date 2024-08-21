@@ -12127,6 +12127,7 @@ pub async fn execute(
                         if skip {
                             continue;
                         }
+                        println!("(0 ) - Algo {} - FILTER STEP - Found Solution", job.settings.challenge_id);
                         if let Ok(Some(solution_data)) = compute_solution(
                             &job.settings,
                             nonce,
@@ -12134,9 +12135,11 @@ pub async fn execute(
                             job.wasm_vm_config.max_memory,
                             job.wasm_vm_config.max_fuel,
                         ) {
+                            println!("(1a) - Algo {} - WASM STEP - WASM gave solution", job.settings.challenge_id);
                             if verify_solution(&job.settings, nonce, &solution_data.solution)
                                 .is_ok()
                             {
+                                println!("(2a) - Algo {} - WASM STEP - Validated solution", job.settings.challenge_id);
                                 {
                                     let mut solutions_count = (*solutions_count).lock().await;
                                     *solutions_count += 1;
@@ -12144,10 +12147,20 @@ pub async fn execute(
                                 if solution_data.calc_solution_signature()
                                     <= job.solution_signature_threshold
                                 {
+                                    println!("(3a) - Algo {} - WASM STEP - Solution signature OK...Submit", job.settings.challenge_id);
                                     let mut solutions_data = (*solutions_data).lock().await;
                                     (*solutions_data).push(solution_data);
                                 }
+                                else{
+                                    println!("(3b) - Algo {} - WASM STEP - Solution signature FAIL...skip solution", job.settings.challenge_id);
+                                }
                             }
+                            else {
+                                println!("(2b) - Algo {} - WASM STEP - Solution not validated", job.settings.challenge_id);
+                            }
+                        }
+                        else {
+                            println!("(1b) - Algo {} - WASM STEP - Fail to return solution from WASM", job.settings.challenge_id);
                         }
                     }
                 }
