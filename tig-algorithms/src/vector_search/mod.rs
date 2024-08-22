@@ -179,7 +179,8 @@ pub use fast_search as c004_a016;
 
 // c004_a025
 
-// c004_a026
+pub mod optimax_gpu;
+pub use optimax_gpu as c004_a026;
 
 // c004_a027
 

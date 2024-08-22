@@ -6118,7 +6118,8 @@ vector_search_fast_search = ["c004_a016"]
 
 # c004_a025 = []
 
-# c004_a026 = []
+c004_a026 = []
+vector_search_optimax_gpu = ["c004_a026"]
 
 # c004_a027 = []
 
