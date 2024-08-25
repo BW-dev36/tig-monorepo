@@ -35,6 +35,8 @@ impl<'a> KDNode<'a> {
         }
     }
 }
+
+#[inline(always)]
 fn quickselect_by<F>(arr: &mut [(&[f32], usize)], k: usize, compare: &F)
 where
     F: Fn(&(&[f32], usize), &(&[f32], usize)) -> Ordering,
@@ -51,6 +53,7 @@ where
     }
 }
 
+#[inline(always)]
 fn partition<F>(arr: &mut [(&[f32], usize)], compare: &F) -> usize
 where
     F: Fn(&(&[f32], usize), &(&[f32], usize)) -> Ordering,
@@ -212,7 +215,6 @@ fn calculate_mean_vector(vectors: &[&[f32]]) -> Vec<f32> {
     mean_vector
 }
 
-#[derive(Debug)]
 struct FloatOrd(f32);
 
 impl PartialEq for FloatOrd {
@@ -277,10 +279,13 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
         29..=45 if challenge.difficulty.better_than_baseline > 480 => 6000,
         46..=50 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
-        51..=70 if challenge.difficulty.better_than_baseline <= 480 => 3000,
-        51..=70 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
-        71..=100 if challenge.difficulty.better_than_baseline <= 480 => 1500,
-        71..=100 if challenge.difficulty.better_than_baseline > 480 => 2500, // need more fuel
+        51..=70 if challenge.difficulty.better_than_baseline <= 480 => 5000,
+        51..=70 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
+        71..=100 if challenge.difficulty.better_than_baseline <= 480 => 4000,
+        71..=100 if challenge.difficulty.better_than_baseline > 480 => 4000, // need more fuel
+        101..=125 => 3500,
+        121..=145 => 3000,
+        146..=220 => 2000,
         _ => 1000,                                                             // need more fuel
     };
     let subset = filter_relevant_vectors(
@@ -355,7 +360,7 @@ mod gpu_optimisation {
             51..=70 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
             71..=100 if challenge.difficulty.better_than_baseline <= 480 => 1500,
             71..=100 if challenge.difficulty.better_than_baseline > 480 => 2500, // need more fuel
-            _ => 1000,                                                             // need more fuel
+            _ => 5000,                                                             // need more fuel
         };
         let subset = cuda_filter_relevant_vectors(
             &challenge.vector_database,
