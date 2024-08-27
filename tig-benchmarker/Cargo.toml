@@ -2137,7 +2137,8 @@ vehicle_routing_clarke_wright = ["c002_a001"]
 
 # c002_a035 = []
 
-# c002_a036 = []
+c002_a036 = []
+vehicle_routing_clarke_wright_super = ["c002_a036"]
 
 # c002_a037 = []
 

@@ -69,7 +69,8 @@ pub use clarke_wright as c002_a001;
 
 // c002_a035
 
-// c002_a036
+pub mod clarke_wright_super;
+pub use clarke_wright_super as c002_a036;
 
 // c002_a037
 
