@@ -23,6 +23,8 @@ target_compile_options(
             $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -mavx2 -Xcompiler -march=native>
 )
 
+set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
+
 target_compile_features(
     ${PROJECT_NAME}
     PUBLIC cxx_std_17

@@ -14,7 +14,7 @@ export ALGORITHM_LOCAL=${ALGORITHM:-optimax_search}
 export CHALLENGE_LOCAL=${CHALLENGE:-vector_search}
 
 export ALGOS_TO_COMPILE=${CHALLENGE_LOCAL}_${ALGORITHM_LOCAL}
-export NONCE=0
+export NONCE=3435435
 export WASM=./tig-algorithms/wasm/${CHALLENGE_LOCAL}/${ALGORITHM_LOCAL}.wasm
 
 #For wasm building
@@ -46,7 +46,7 @@ echo "$challenges_response" | jq -c '.challenges[] | select(.id=="c004") | .bloc
     fi
 
     start_time=$(date +%s%3N)
-    output=$(./target/release/tig-worker compute_solution --fuel 1500000000 $SETTINGS $NONCE $WASM 2>&1)
+    output=$(./target/release/tig-worker compute_solution --fuel 2000000000 $SETTINGS $NONCE $WASM 2>&1)
     exit_code=$?
     end_time=$(date +%s%3N)
     duration=$((end_time - start_time))

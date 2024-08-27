@@ -16,6 +16,8 @@ add_library(${PROJECT_NAME} STATIC
     clarke_wright_v1.cpp
 )
 
+set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
+
 target_compile_options(
     ${PROJECT_NAME}
     PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native -fPIC>

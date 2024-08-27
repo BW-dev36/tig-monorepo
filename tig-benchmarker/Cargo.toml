@@ -31,6 +31,7 @@ tig-challenges = { path = "../tig-challenges" }
 tig-structs = { path = "../tig-structs" }
 tig-utils = { path = "../tig-utils" }
 tig-worker = { path = "../tig-worker" }
+
 tokio = { version = "1.37.0", features = ["full"], optional = true }
 wasm-bindgen = { version = "0.2.91", features = [
     "serde-serialize",
@@ -6117,7 +6118,8 @@ vector_search_brute_force_bacalhau = ["c004_a014"]
 
 # c004_a025 = []
 
-# c004_a026 = []
+c004_a026 = []
+vector_search_optimax_gpu = ["c004_a026"]
 
 # c004_a027 = []
 

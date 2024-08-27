@@ -30,6 +30,8 @@ if(BUILD_SHARED_LIBS)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libstdc++ -static-libgcc")
 
 if (ENABLE_CUDA)
     find_package(CUDAToolkit)
@@ -52,7 +54,7 @@ set_target_properties(rust_lib PROPERTIES
 
 
 # Shared library
-add_library(cpp_cuda SHARED 
+add_library(cpp_cuda STATIC 
                 $<TARGET_OBJECTS:knapsack_gpu>
                 $<TARGET_OBJECTS:sat_gpu>
                 $<TARGET_OBJECTS:clarke_gpu>
@@ -68,6 +70,12 @@ target_compile_features(
     cpp_cuda
     PUBLIC cxx_std_17
 )
+# Créez un fichier source spécifique pour forcer l'inclusion de libstdc++
+add_library(libstdcxx_object OBJECT entry.cpp)
+
+# Forcer la liaison statique des bibliothèques standard C++ et GCC
+set_target_properties(libstdcxx_object PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
+
 
 if (ENABLE_CUDA)
     set_target_properties(
@@ -79,13 +87,16 @@ if (ENABLE_CUDA)
     )
     target_link_libraries(
         cpp_cuda
+        PRIVATE libstdcxx_object
         PRIVATE CUDA::cudart
         PUBLIC knapsack_gpu
+        PUBLIC rust_lib
     )
 
 else()
     target_link_libraries(
         cpp_cuda
+        PRIVATE libstdcxx_object
         PUBLIC knapsack_gpu
         PUBLIC rust_lib
     )

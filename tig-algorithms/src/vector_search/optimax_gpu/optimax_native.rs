@@ -18,7 +18,6 @@ use anyhow::Ok;
 use tig_challenges::vector_search::*;
 
 
-
 #[repr(C)]
 pub struct VSOChallenge {
     vector_database: *const f32,

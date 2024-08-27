@@ -30,6 +30,7 @@ pub struct CSolution {
     pub num_variables: i32,
 }
 
+#[link(name = "rust_lib", kind = "static")]
 extern "C" {
     fn solve_sprint_sat_v2_cpp(challenge: *const CChallenge, solution: *mut CSolution);
 }

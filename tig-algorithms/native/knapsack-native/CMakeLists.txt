@@ -6,34 +6,34 @@ enable_testing()
 # Initialize CMAKE_CUDA_ARCHITECTURES when CMAKE_CUDA_COMPILER_ID is NVIDIA
 cmake_policy(SET CMP0104 NEW)
 
-
+set(PROJECT_NAME knapsack_gpu)
 
 if (ENABLE_CUDA)
     find_package(CUDAToolkit REQUIRED)
 
     # Shared library with CUDA
-    add_library(knapsack_gpu STATIC
+    add_library(${PROJECT_NAME} STATIC
         dp_cuda.cu
         knapmaxxing.cpp
         knapmaxxing-v2.cu
         dp_cuda.h
         entrypoint.cu
     )
-    target_compile_definitions(knapsack_gpu PUBLIC __GPU__)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC __GPU__)
 
     target_compile_options(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native -fPIC>
                 $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -mavx2 -Xcompiler -march=native>
     )
 
     target_compile_features(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PUBLIC cxx_std_17
     )
 
     set_target_properties(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PROPERTIES
             CUDA_SEPARABLE_COMPILATION ON
             CUDA_RESOLVE_DEVICE_SYMBOLS ON # Fixes linking for Windows
@@ -41,25 +41,25 @@ if (ENABLE_CUDA)
     )
 
     target_link_libraries(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PRIVATE CUDA::cudart
     )
 
    
 else()
     # Shared library without CUDA
-    add_library(knapsack_gpu STATIC
+    add_library(${PROJECT_NAME} STATIC
         knapmaxxing.cpp
         dp_cuda.h
     )
-
+    set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
     target_compile_options(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native -fPIC>
     )
 
     target_compile_features(
-        knapsack_gpu
+        ${PROJECT_NAME}
         PUBLIC cxx_std_17
     )
 endif()

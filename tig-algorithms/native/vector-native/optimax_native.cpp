@@ -213,8 +213,8 @@ extern "C"
         //           << std::chrono::duration_cast<std::chrono::milliseconds>(end_mean_calc - start_mean_calc).count()
         //           << " ms" << std::endl;
 
-        auto start_filtering = std::chrono::high_resolution_clock::now();
-        int subset_size = 10; // Valeur par défaut
+        //auto start_filtering = std::chrono::high_resolution_clock::now();
+        int subset_size = 1000; // Valeur par défaut
 
         // Condition pour déterminer subset_size
         if (challenge->num_queries >= 10 && challenge->num_queries <= 19)

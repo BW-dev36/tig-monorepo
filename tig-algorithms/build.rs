@@ -7,14 +7,14 @@ fn main() {
     let output_dir = env::var("OUT_DIR").unwrap();
     let cuda_src_dir = "native"; // Mise à jour du chemin relatif
 
-    // Compile the Rust library
-    let status = Command::new("cargo")
-        .current_dir("../rust_wrapper/rust_lib")
-        .args(&["-Z", "unstable-options", "build", "--release", "--out-dir", format!("{}", env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| output_dir.clone())).as_str()])
-        .status()
-        .expect("Failed to build Rust library");
+    // // Compile the Rust library
+    // let status = Command::new("cargo")
+    //     .current_dir("../rust_wrapper/rust_lib")
+    //     .args(&["-Z", "unstable-options", "build", "--release", "--out-dir", format!("{}", env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| output_dir.clone())).as_str()])
+    //     .status()
+    //     .expect("Failed to build Rust library");
 
-    assert!(status.success(), "Cargo build failed");
+    // assert!(status.success(), "Cargo build failed");
 
 
     // Obtenir le répertoire de travail actuel
@@ -72,9 +72,15 @@ fn main() {
 
     assert!(make_status.success(), "Make build failed");
 
-    // Lien vers la bibliothèque construite
+
+
     println!("cargo:rustc-link-search=native={}", build_dir.to_str().unwrap());
     println!("cargo:rustc-link-lib=cpp_cuda");
     println!("cargo:rerun-if-changed={}/knapmaxxing.cu", src_dir_str);
+    println!("cargo:rustc-link-search=native=/usr/lib/gcc/x86_64-linux-gnu/12/");
+    println!("cargo:rustc-link-lib=dylib=stdc++");
+    // Lien vers la bibliothèque construite
+    println!("cargo:rustc-link-search=native={}", output_dir);
+    println!("cargo:rustc-link-lib=static=rust_lib");
    
 }
