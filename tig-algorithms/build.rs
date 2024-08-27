@@ -80,7 +80,7 @@ fn main() {
     println!("cargo:rustc-link-search=native=/usr/lib/gcc/x86_64-linux-gnu/12/");
     println!("cargo:rustc-link-lib=dylib=stdc++");
     // Lien vers la bibliothèque construite
-    println!("cargo:rustc-link-search=native={}", output_dir);
-    println!("cargo:rustc-link-lib=static=rust_lib");
+    // println!("cargo:rustc-link-search=native={}", output_dir);
+    // println!("cargo:rustc-link-lib=static=rust_lib");
    
 }
