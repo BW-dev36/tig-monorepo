@@ -497,3 +497,9 @@ pub async fn setup(api_url: String, api_key: String, player_id: String) {
         })
     });
 }
+
+
+pub async fn update_benchmark_duration(duration: u32) {
+    let mut state = (*state()).lock().await;
+    state.ms_per_benchmark = Some(duration);
+}
