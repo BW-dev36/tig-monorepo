@@ -5,6 +5,8 @@ mod query_data;
 mod setup_job;
 mod submit_benchmark;
 mod submit_proof;
+pub mod algo_selection;
+
 
 #[cfg(not(feature = "cuda"))]
 pub mod run_benchmark;
@@ -22,6 +24,7 @@ use tig_structs::{
     config::{MinMaxDifficulty, WasmVMConfig},
     core::*,
 };
+
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -454,12 +457,20 @@ pub async fn stop() {
         _ => {}
     }
 }
+
 pub async fn select_algorithm(challenge_name: String, algorithm_name: String) {
     let mut state = (*state()).lock().await;
+    state.selected_algorithms.clear();
     state
         .selected_algorithms
         .insert(challenge_name, algorithm_name);
 }
+
+pub async fn update_duration(duration: u32) {
+    let mut state = (*state()).lock().await;
+    state.timer = Some(Timer::new(duration as u64));
+}
+
 
 pub async fn setup(api_url: String, api_key: String, player_id: String) {
     API.get_or_init(|| Api::new(api_url, api_key));
