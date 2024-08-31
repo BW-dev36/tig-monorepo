@@ -3,7 +3,7 @@
 
 mod benchmarker;
 mod future_utils;
-use benchmarker::{Job, NonceIterator};
+use benchmarker::{Job, NonceIterator, algo_selection::select_algorithms_to_run};
 use clap::{value_parser, Arg, Command};
 use future_utils::{sleep, Mutex};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
@@ -239,7 +239,7 @@ async fn master_node(
     port: u16,
     nonce_offset: u64,
 ) {
-    benchmarker::setup(api_url, api_key, player_id).await;
+    benchmarker::setup(api_url, api_key, player_id.clone()).await;
     benchmarker::start(num_workers, duration).await;
     future_utils::spawn(async move {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
@@ -281,9 +281,19 @@ async fn master_node(
             &fs::read_to_string(algorithms_path).unwrap(),
         )
         .unwrap();
-        for (challenge_id, algorithm_id) in selection {
+        
+        let (selected_algo, nb_solution) = select_algorithms_to_run(&player_id, duration, &selection).await.expect("Unkown issue");
+
+        
+        for (challenge_id, (algorithm_id, d)) in selected_algo {
+            
+            println!("Select Algorithm {}_{} lowest solution == {} duration = {}", challenge_id, algorithm_id, nb_solution, duration);
+            benchmarker::update_duration(d).await;    
+            duration = d;
             benchmarker::select_algorithm(challenge_id, algorithm_id).await;
+            break;
         }
-        future_utils::sleep(10000).await;
+        
+        future_utils::sleep(300 + duration).await;
     }
 }
