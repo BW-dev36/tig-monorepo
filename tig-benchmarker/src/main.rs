@@ -284,16 +284,16 @@ async fn master_node(
         
         let (selected_algo, nb_solution) = select_algorithms_to_run(&player_id, duration, &selection).await.expect("Unkown issue");
 
-        
+        let new_duration = duration;
         for (challenge_id, (algorithm_id, d)) in selected_algo {
             
             println!("Select Algorithm {}_{} lowest solution == {} duration = {}", challenge_id, algorithm_id, nb_solution, duration);
-            benchmarker::update_duration(d).await;    
-            duration = d;
+            benchmarker::update_benchmark_duration(d).await;    
+            new_duration = d;
             benchmarker::select_algorithm(challenge_id, algorithm_id).await;
             break;
         }
         
-        future_utils::sleep(300 + duration).await;
+        future_utils::sleep(300 + new_duration).await;
     }
 }
