@@ -68,7 +68,8 @@ pub use clarke_wright_who as c002_a023;
 
 // c002_a034
 
-// c002_a035
+pub mod cw_heuristic;
+pub use cw_heuristic as c002_a035;
 
 // c002_a036
 
