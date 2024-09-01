@@ -5,6 +5,7 @@ use tig_worker::SolutionData;
 
 const MAX_RETRIES: u32 = 3;
 
+
 pub async fn execute(benchmark_id: String, solutions_data: Vec<SolutionData>) -> Result<()> {
     let req = SubmitProofReq {
         benchmark_id,
@@ -21,6 +22,12 @@ pub async fn execute(benchmark_id: String, solutions_data: Vec<SolutionData>) ->
             }
             Err(e) => {
                 let err_msg = format!("Failed to submit proof: {:?}", e);
+                
+                // Vérifier si le message d'erreur contient le mot clé "already"
+                if err_msg.contains("already") {
+                    return Ok(());
+                }
+
                 if attempt < MAX_RETRIES {
                     println!("{}", err_msg);
                     println!("Retrying in 5 seconds...");
