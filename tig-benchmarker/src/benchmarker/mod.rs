@@ -138,6 +138,7 @@ pub enum Status {
 #[derive(Serialize, Debug, Clone)]
 pub struct State {
     pub status: Status,
+    pub ms_per_benchmark: u32,
     pub timer: Option<Timer>,
     pub query_data: QueryData,
     pub selected_algorithms: HashMap<String, String>,
@@ -295,7 +296,7 @@ async fn run_once(num_workers: u32, ms_per_benchmark: u32) -> Result<()> {
     .await;
     {
         let mut state = state().lock().await;
-        (*state).timer = Some(Timer::new(ms_per_benchmark as u64));
+        (*state).timer = Some(Timer::new(state.ms_per_benchmark as u64));
     }
     loop {
         {
@@ -488,6 +489,7 @@ pub async fn setup(api_url: String, api_key: String, player_id: String) {
     STATE.get_or_init(|| {
         Mutex::new(State {
             status: Status::Stopped,
+            ms_per_benchmark: 0,
             timer: None,
             query_data,
             difficulty_samplers,
@@ -501,5 +503,5 @@ pub async fn setup(api_url: String, api_key: String, player_id: String) {
 
 pub async fn update_benchmark_duration(duration: u32) {
     let mut state = (*state()).lock().await;
-    state.ms_per_benchmark = Some(duration);
+    state.ms_per_benchmark = duration;
 }

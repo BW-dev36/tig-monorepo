@@ -240,6 +240,7 @@ async fn master_node(
     nonce_offset: u64,
 ) {
     benchmarker::setup(api_url, api_key, player_id.clone()).await;
+    benchmarker::update_benchmark_duration(duration).await;    
     benchmarker::start(num_workers, duration).await;
     future_utils::spawn(async move {
         let offsets = Arc::new(Mutex::new(HashMap::new()));
@@ -284,16 +285,16 @@ async fn master_node(
         
         let (selected_algo, nb_solution) = select_algorithms_to_run(&player_id, duration, &selection).await.expect("Unkown issue");
 
-        let new_duration = duration;
-        for (challenge_id, (algorithm_id, d)) in selected_algo {
+        let mut new_duration: Option<u32> = None;
+
+        for (challenge_id, (algorithm_id, d)) in &selected_algo {
             
-            println!("Select Algorithm {}_{} lowest solution == {} duration = {}", challenge_id, algorithm_id, nb_solution, duration);
-            benchmarker::update_benchmark_duration(d).await;    
-            new_duration = d;
-            benchmarker::select_algorithm(challenge_id, algorithm_id).await;
+            println!("Select Algorithm {}_{} lowest solution == {} duration = {}", challenge_id, algorithm_id, nb_solution, d);
+            benchmarker::update_benchmark_duration(*d).await;    
+            new_duration = Some(*d);
+            benchmarker::select_algorithm(challenge_id.clone(), algorithm_id.clone()).await;
             break;
         }
-        
-        future_utils::sleep(300 + new_duration).await;
+        future_utils::sleep(new_duration.unwrap_or(duration)).await;
     }
 }
