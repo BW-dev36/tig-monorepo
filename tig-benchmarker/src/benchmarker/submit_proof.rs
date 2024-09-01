@@ -25,7 +25,7 @@ pub async fn execute(benchmark_id: String, solutions_data: Vec<SolutionData>) ->
                 
                 // Vérifier si le message d'erreur contient le mot clé "already"
                 if err_msg.contains("already") {
-                    return Err(err_msg);
+                    return Ok(());
                 }
 
                 if attempt < MAX_RETRIES {
