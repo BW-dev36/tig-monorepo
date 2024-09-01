@@ -13,7 +13,7 @@ pub async fn select_algorithms_to_run(
     // Crée un map par défaut pour algo_map
     let mut algo_map: HashMap<String, (String, u32)> = HashMap::new();
     algo_map.insert("c001".to_string(), ("satisfiability".to_string(), 12000));
-    algo_map.insert("c002".to_string(), ("vehicle_routing".to_string(), 12000));
+    algo_map.insert("c002".to_string(), ("vehicle_routing".to_string(), 18000));
     algo_map.insert("c003".to_string(), ("knapsack".to_string(), 9500));
     algo_map.insert("c004".to_string(), ("vector_search".to_string(), 20000));
 
@@ -94,7 +94,7 @@ fn determine_algorithms_to_run(
         completed_solutions.insert(algo.clone(), (exec_name.clone(), solution_count, *duration));
     }
 
-    println!("Solutions by algo : {:#?}", completed_solutions);
+    //println!("Solutions by algo : {:#?}", completed_solutions);
 
     // Trouver le nombre minimum de solutions trouvées parmi tous les algorithmes
     let min_solutions = completed_solutions
@@ -138,7 +138,7 @@ fn generate_algo_map(
     }
     if let Some((ref algo_name, _, duration)) = algos_to_run {
         for (name, exec_name) in algo_selection {
-            println!("algo_name {} vs {}", algo_name, name);
+            //println!("algo_name {} vs {}", algo_name, name);
             if algo_name == name {
                 config.insert(name.clone(), (exec_name.clone(), duration.clone()));
             }
