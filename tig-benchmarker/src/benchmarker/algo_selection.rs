@@ -12,10 +12,10 @@ pub async fn select_algorithms_to_run(
 ) -> Result<(HashMap<String, (String, u32)>, u32), Box<dyn Error>> {
     // Crée un map par défaut pour algo_map
     let mut algo_map: HashMap<String, (String, u32)> = HashMap::new();
-    algo_map.insert("c001".to_string(), ("satisfiability".to_string(), 12000));
-    algo_map.insert("c002".to_string(), ("vehicle_routing".to_string(), 18000));
-    algo_map.insert("c003".to_string(), ("knapsack".to_string(), 9500));
-    algo_map.insert("c004".to_string(), ("vector_search".to_string(), 20000));
+    algo_map.insert("c001".to_string(), ("satisfiability".to_string(), 22000));
+    algo_map.insert("c002".to_string(), ("vehicle_routing".to_string(), 22000));
+    algo_map.insert("c003".to_string(), ("knapsack".to_string(), 22000));
+    algo_map.insert("c004".to_string(), ("vector_search".to_string(), 22000));
 
     // Récupérer les solutions à partir de l'ID du joueur
     let solutions: HashMap<String, u32> = fetch_solutions(player_id).await?;
