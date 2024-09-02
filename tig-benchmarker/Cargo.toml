@@ -10,7 +10,7 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0.81"
 clap = { version = "4.5.4", optional = true }
-cudarc = { version = "0.11.8", features = [
+cudarc = { version = "0.12.0", features = [
     "cuda-version-from-build-system",
 ], optional = true }
 futures = { version = "0.3.30" }
@@ -6117,7 +6117,8 @@ vector_search_brute_force_bacalhau = ["c004_a014"]
 
 # c004_a025 = []
 
-# c004_a026 = []
+c004_a026 = []
+vector_search_optimax_gpu = ["c004_a026"]
 
 # c004_a027 = []
 
