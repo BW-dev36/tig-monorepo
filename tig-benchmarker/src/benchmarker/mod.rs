@@ -370,27 +370,27 @@ async fn run_once(num_workers: u32, ms_per_benchmark: u32) -> Result<()> {
             update_status("Finished. No solutions to submit").await;
         } else {
             update_status(&format!("Finished. Submitting {} solutions", num_solutions,)).await;
-            let benchmark_id = match submit_benchmark::execute(&job).await {
-                Ok(benchmark_id) => benchmark_id,
-                Err(e) => {
-                    let mut state = (*state()).lock().await;
-                    state
-                        .submission_errors
-                        .insert(job.benchmark_id.clone(), e.clone());
-                    return Err(e);
-                }
-            };
-            update_status(&format!("Success. Benchmark {} submitted", benchmark_id)).await;
-            let mut state = (*state()).lock().await;
-            let QueryData {
-                benchmarks, proofs, ..
-            } = &mut (*state).query_data;
-            let mut benchmark = benchmarks.remove(&job.benchmark_id).unwrap();
-            let mut proof = proofs.remove(&job.benchmark_id).unwrap();
-            benchmark.id = benchmark_id.clone();
-            proof.benchmark_id = benchmark_id.clone();
-            benchmarks.insert(benchmark_id.clone(), benchmark);
-            proofs.insert(benchmark_id.clone(), proof);
+            // let benchmark_id = match submit_benchmark::execute(&job).await {
+            //     Ok(benchmark_id) => benchmark_id,
+            //     Err(e) => {
+            //         let mut state = (*state()).lock().await;
+            //         state
+            //             .submission_errors
+            //             .insert(job.benchmark_id.clone(), e.clone());
+            //         return Err(e);
+            //     }
+            // };
+            // update_status(&format!("Success. Benchmark {} submitted", benchmark_id)).await;
+            // let mut state = (*state()).lock().await;
+            // let QueryData {
+            //     benchmarks, proofs, ..
+            // } = &mut (*state).query_data;
+            // let mut benchmark = benchmarks.remove(&job.benchmark_id).unwrap();
+            // let mut proof = proofs.remove(&job.benchmark_id).unwrap();
+            // benchmark.id = benchmark_id.clone();
+            // proof.benchmark_id = benchmark_id.clone();
+            // benchmarks.insert(benchmark_id.clone(), benchmark);
+            // proofs.insert(benchmark_id.clone(), proof);
         }
     }
     Ok(())

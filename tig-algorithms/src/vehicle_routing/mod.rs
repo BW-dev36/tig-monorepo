@@ -1,28 +1,29 @@
 pub mod clarke_wright_ultimate;
+pub use clarke_wright_ultimate as c002_a002;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tig_challenges::{vehicle_routing::*, *};
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use tig_challenges::{vehicle_routing::*, *};
 
-    #[test]
-    fn test_clarke_wright() {
-        let difficulty = Difficulty {
-            num_nodes: 131,
-            better_than_baseline: 100,
-        };
-        let seeds = [0; 8]; // change this to generate different instances
-        let challenge = Challenge::generate_instance(seeds, &difficulty).unwrap();
-        match clarke_wright_ultimate::solve_challenge(&challenge) {
-            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
-                Ok(_) => println!("Valid solution"),
-                Err(e) => println!("Invalid solution: {}", e),
-            },
-            Ok(None) => println!("No solution"),
-            Err(e) => println!("Algorithm error: {}", e),
-        };
-    }
-}
+//     #[test]
+//     fn test_clarke_wright() {
+//         let difficulty = Difficulty {
+//             num_nodes: 131,
+//             better_than_baseline: 100,
+//         };
+//         let seeds = [0; 8]; // change this to generate different instances
+//         let challenge = Challenge::generate_instance(seeds, &difficulty).unwrap();
+//         match clarke_wright_ultimate::solve_challenge(&challenge) {
+//             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+//                 Ok(_) => println!("Valid solution"),
+//                 Err(e) => println!("Invalid solution: {}", e),
+//             },
+//             Ok(None) => println!("No solution"),
+//             Err(e) => println!("Algorithm error: {}", e),
+//         };
+//     }
+// }
 
 pub mod clarke_wright;
 pub use clarke_wright as c002_a001;

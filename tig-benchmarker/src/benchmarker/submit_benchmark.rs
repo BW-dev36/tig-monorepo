@@ -24,6 +24,7 @@ pub async fn execute(job: &Job) -> Result<String> {
             solution_data,
         }
     };
+    
     for attempt in 1..=MAX_RETRIES {
         println!("Submission attempt {} of {}", attempt, MAX_RETRIES);
         match api().submit_benchmark(req.clone()).await {
