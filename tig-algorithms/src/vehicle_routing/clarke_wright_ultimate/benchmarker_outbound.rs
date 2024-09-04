@@ -2,12 +2,13 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tig_challenges::vehicle_routing::*;
 
-const NUM_PERTURBATIONS: usize = 30;
-const PERTURBATION_LIMIT: i32 = 10;
+const NUM_PERTURBATIONS: usize = 100;
+const PERTURBATION_DECAY: f32 = 0.9;
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let distance_matrix = &challenge.distance_matrix;
     let num_nodes = challenge.difficulty.num_nodes;
+    let baseline = challenge.difficulty.better_than_baseline;
 
     let mut optimal_solution: Option<Solution> = None;
     let mut minimum_cost: i32 = i32::MAX;
@@ -30,6 +31,9 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         }
     }
 
+    let base_perturbation = determine_perturbation(num_nodes, baseline);
+    let mut current_perturbation = base_perturbation as f32;
+
     for run in 0..NUM_PERTURBATIONS {
         let mut rng = StdRng::seed_from_u64(
             challenge.seeds[0] as u64 + NUM_PERTURBATIONS as u64 + run as u64,
@@ -37,7 +41,8 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
 
         let mut scores = original_scores.clone();
         for score in &mut scores {
-            let perturbation: i32 = rng.gen_range(-PERTURBATION_LIMIT..PERTURBATION_LIMIT);
+            let perturbation: i32 =
+                rng.gen_range((-current_perturbation as i32)..(current_perturbation as i32));
             score.0 += perturbation;
         }
         scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
@@ -53,6 +58,9 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         if total_cost < minimum_cost {
             minimum_cost = total_cost;
             optimal_solution = Some(solution);
+            current_perturbation *= PERTURBATION_DECAY;
+        } else {
+            current_perturbation = base_perturbation as f32;
         }
     }
 
@@ -192,6 +200,16 @@ fn compute_route_cost(route: &Vec<usize>, distance_matrix: &Vec<Vec<i32>>) -> i3
         .windows(2)
         .map(|pair| distance_matrix[pair[0]][pair[1]])
         .sum()
+}
+
+fn determine_perturbation(num_nodes: usize, baseline: u32) -> i32 {
+    match (num_nodes, baseline) {
+        (65..80, 300..=324) => 24,
+        (80..=94, 300..=324) => 17,
+        (95..=109, 300..=324) => 21,
+        (110..=125, 275..=299) => 10,
+        _ => 20,
+    }
 }
 
 #[cfg(feature = "cuda")]
