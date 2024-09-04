@@ -1,5 +1,71 @@
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use tig_challenges::vehicle_routing::*;
+
+const NUM_PERTURBATIONS: usize = 100;
+const PERTURBATION_DECAY: f32 = 0.9;
+
+pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
+    let distance_matrix = &challenge.distance_matrix;
+    let num_nodes = challenge.difficulty.num_nodes;
+    let baseline = challenge.difficulty.better_than_baseline;
+
+    let mut optimal_solution: Option<Solution> = None;
+    let mut minimum_cost: i32 = i32::MAX;
+
+    let original_scores = compute_scores(distance_matrix, num_nodes);
+
+    {
+        let mut scores = original_scores.clone();
+        let mut solution = generate_initial_solution(challenge, &mut scores);
+        solution = optimize_with_2_opt(solution, distance_matrix);
+        let total_cost = compute_total_cost(&solution, distance_matrix);
+
+        if total_cost < challenge.max_total_distance {
+            return Ok(Some(solution));
+        }
+
+        if total_cost < minimum_cost {
+            minimum_cost = total_cost;
+            optimal_solution = Some(solution);
+        }
+    }
+
+    let base_perturbation = determine_perturbation(num_nodes, baseline);
+    let mut current_perturbation = base_perturbation as f32;
+
+    for run in 0..NUM_PERTURBATIONS {
+        let mut rng = StdRng::seed_from_u64(
+            challenge.seeds[0] as u64 + NUM_PERTURBATIONS as u64 + run as u64,
+        );
+
+        let mut scores = original_scores.clone();
+        for score in &mut scores {
+            let perturbation: i32 =
+                rng.gen_range((-current_perturbation as i32)..(current_perturbation as i32));
+            score.0 += perturbation;
+        }
+        scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+
+        let mut solution = generate_initial_solution(challenge, &mut scores);
+        solution = optimize_with_2_opt(solution, distance_matrix);
+        let total_cost = compute_total_cost(&solution, distance_matrix);
+
+        if total_cost < challenge.max_total_distance {
+            return Ok(Some(solution));
+        }
+
+        if total_cost < minimum_cost {
+            minimum_cost = total_cost;
+            optimal_solution = Some(solution);
+            current_perturbation *= PERTURBATION_DECAY;
+        } else {
+            current_perturbation = base_perturbation as f32;
+        }
+    }
+
+    Ok(optimal_solution)
+}
 
 fn compute_scores(distance_matrix: &Vec<Vec<i32>>, num_nodes: usize) -> Vec<(i32, usize, usize)> {
     let mut scores = Vec::with_capacity((num_nodes * (num_nodes - 1)) / 2);
@@ -136,62 +202,15 @@ fn compute_route_cost(route: &Vec<usize>, distance_matrix: &Vec<Vec<i32>>) -> i3
         .sum()
 }
 
-
-pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
-    let distance_matrix = &challenge.distance_matrix;
-    let num_nodes = challenge.difficulty.num_nodes;
-
-    let mut optimal_solution: Option<Solution> = None;
-    let mut minimum_cost: i32 = i32::MAX;
-
-    let original_scores = compute_scores(distance_matrix, num_nodes);
-
-    {
-        let mut scores = original_scores.clone();
-        let mut solution = generate_initial_solution(challenge, &mut scores);
-        solution = optimize_with_2_opt(solution, distance_matrix);
-        let total_cost = compute_total_cost(&solution, distance_matrix);
-
-        if total_cost < challenge.max_total_distance {
-            return Ok(Some(solution));
-        }
-
-        if total_cost < minimum_cost {
-            minimum_cost = total_cost;
-            optimal_solution = Some(solution);
-        }
+fn determine_perturbation(num_nodes: usize, baseline: u32) -> i32 {
+    match (num_nodes, baseline) {
+        (65..80, 300..=324) => 24,
+        (80..=94, 300..=324) => 17,
+        (95..=109, 300..=324) => 21,
+        (110..=125, 275..=299) => 10,
+        _ => 20,
     }
-
-    for run in 0..30 {
-        let mut rng = StdRng::seed_from_u64(
-            challenge.seeds[0] as u64 + 30 as u64 + run as u64,
-        );
-
-        let mut scores = original_scores.clone();
-        for score in &mut scores {
-            let perturbation: i32 = rng.gen_range(-10..10);
-            score.0 += perturbation;
-        }
-        scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-
-        let mut solution = generate_initial_solution(challenge, &mut scores);
-        solution = optimize_with_2_opt(solution, distance_matrix);
-        let total_cost = compute_total_cost(&solution, distance_matrix);
-
-        if total_cost < challenge.max_total_distance {
-            return Ok(Some(solution));
-        }
-
-        if total_cost < minimum_cost {
-            minimum_cost = total_cost;
-            optimal_solution = Some(solution);
-        }
-    }
-
-    Ok(optimal_solution)
-    //Ok(None)
 }
-
 
 #[cfg(feature = "cuda")]
 mod gpu_optimization {
