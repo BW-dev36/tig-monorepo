@@ -217,10 +217,12 @@ async fn slave_node(master: &String, port: u16, num_workers: u32) {
                 let nonce_iter = (*nonce_iter).lock().await;
                 num_attempts += nonce_iter.attempts();
             }
-            println!(
-                "Computed {} solutions out of {} instances",
-                num_solutions, num_attempts
-            );
+            if num_solutions != 0 {
+                println!(
+                    "Computed {} solutions out of {} instances",
+                    num_solutions, num_attempts
+                );
+            }
             sleep(100).await;
         } else {
             println!("No job, sleeping 100ms");

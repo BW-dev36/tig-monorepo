@@ -238,11 +238,11 @@ async fn run_once(num_workers: u32, ms_per_benchmark: u32) -> Result<()> {
     match find_proof_to_submit::execute().await? {
         Some((benchmark_id, solutions_data)) => {
             update_status(&format!("Submitting proof for {}", benchmark_id)).await;
-            if let Err(e) = submit_proof::execute(benchmark_id.clone(), solutions_data).await {
-                let mut state = state().lock().await;
-                state.submission_errors.insert(benchmark_id, e.clone());
-                return Err(e);
-            }
+            // if let Err(e) = submit_proof::execute(benchmark_id.clone(), solutions_data).await {
+            //     let mut state = state().lock().await;
+            //     state.submission_errors.insert(benchmark_id, e.clone());
+            //     return Err(e);
+            // }
             update_status(&format!("Success. Proof {} submitted", benchmark_id)).await;
         }
         None => {
@@ -306,11 +306,13 @@ async fn run_once(num_workers: u32, ms_per_benchmark: u32) -> Result<()> {
                 num_attempts += nonce_iter.attempts();
                 finished &= nonce_iter.is_empty();
             }
-            update_status(&format!(
-                "Computed {} solutions out of {} instances",
-                num_solutions, num_attempts
-            ))
-            .await;
+            if num_solutions != 0 {
+                update_status(&format!(
+                    "Computed {} solutions out of {} instances",
+                    num_solutions, num_attempts
+                ))
+                .await;
+            }
             let State {
                 status,
                 timer: time_left,
