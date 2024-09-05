@@ -64,7 +64,8 @@ pub use sat_allocd as c001_a023;
 
 // c001_a030
 
-// c001_a031
+pub mod sat_optima;
+pub use sat_optima as c001_a031;
 
 // c001_a032
 
