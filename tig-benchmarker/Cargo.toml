@@ -102,7 +102,8 @@ satisfiability_sat_allocd = ["c001_a023"]
 
 # c001_a030 = []
 
-# c001_a031 = []
+c001_a031 = []
+satisfiability_sat_optima = ["c001_a031"]
 
 # c001_a032 = []
 

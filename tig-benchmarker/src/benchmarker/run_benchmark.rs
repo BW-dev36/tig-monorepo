@@ -124,8 +124,8 @@ pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job,
                                     // #[cfg(feature = "c001_a030")]
                                     // "c001_a030" => Some(c001::c001_a030::solve_challenge as SolveChallengeFn),
 
-                                    // #[cfg(feature = "c001_a031")]
-                                    // "c001_a031" => Some(c001::c001_a031::solve_challenge as SolveChallengeFn),
+                                    #[cfg(feature = "c001_a031")]
+                                    "c001_a031" => Some(c001::c001_a031::solve_challenge as SolveChallengeFn),
 
                                     // #[cfg(feature = "c001_a032")]
                                     // "c001_a032" => Some(c001::c001_a032::solve_challenge as SolveChallengeFn),
