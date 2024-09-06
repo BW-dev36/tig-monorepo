@@ -2,7 +2,7 @@ use super::{api, state, Job, QueryData, Result};
 use crate::future_utils::sleep;
 use tig_api::SubmitBenchmarkReq;
 
-const MAX_RETRIES: u32 = 3;
+const MAX_RETRIES: u32 = 6;
 
 pub async fn execute(job: &Job) -> Result<String> {
     let req = {
