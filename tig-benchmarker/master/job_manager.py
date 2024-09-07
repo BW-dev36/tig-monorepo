@@ -5,7 +5,10 @@ from master.data import *
 from master.utils import *
 from collections import Counter
 import time
+import math
 
+cached_block_id = None
+cached_weights = None
 last_regular_draw_time = time.time()
 
 async def run(state: State):
@@ -128,6 +131,13 @@ async def _execute(state: State):
     available_jobs.update({job.benchmark_id: job for job in new_jobs})
 
 async def _calibrate_challenges(state: State):
+    global cached_block_id, cached_weights
+    
+    current_block_id = state.query_data.block.id  
+    
+    if cached_block_id == current_block_id and cached_weights is not None:
+        return cached_weights
+
     solutions_by_challenge = await _get_solutions_by_challenge(state)    
     weights = {challenge_id: 0 for challenge_id in state.query_data.challenges}
     
@@ -136,6 +146,7 @@ async def _calibrate_challenges(state: State):
         
         if total_solutions > 0:
             min_proportion = None
+            
             for challenge_id, num_solutions in solutions_by_challenge.items():
                 challenge_proportion = num_solutions / total_solutions if total_solutions > 0 else 0
                 weight = 1 / (challenge_proportion + 0.01)
@@ -148,16 +159,30 @@ async def _calibrate_challenges(state: State):
                 for challenge_id in weights:
                     weights[challenge_id] = round(weights[challenge_id] / min_proportion)
             
-            max_weight = max(weights.values())
+            sorted_solutions = sorted(solutions_by_challenge.values(), reverse=True)
+            max_solutions = sorted_solutions[0]
+            second_max_solutions = sorted_solutions[1] if len(sorted_solutions) > 1 else 0
             
+            challenges_with_max_solutions = [challenge_id for challenge_id, num_solutions in solutions_by_challenge.items() if num_solutions == max_solutions]
+            
+            proportion_max = max_solutions / total_solutions
+            proportion_second = second_max_solutions / total_solutions
+            
+            if len(challenges_with_max_solutions) == 1 and total_solutions > 0 and (proportion_max - proportion_second) > 0.2:
+                challenge_with_most_solutions = challenges_with_max_solutions[0]
+                weights[challenge_with_most_solutions] = 0
+            
+            max_weight = max(weights.values())  
             for challenge_id in weights:
-                if weights[challenge_id] == 0:
-                    weights[challenge_id] = max_weight * 2
+                if weights[challenge_id] == 0 and challenge_id != challenge_with_most_solutions:
+                    weights[challenge_id] = max_weight * 2  
     else:
         weights = {challenge_id: 1 for challenge_id in state.query_data.challenges}
     
+    cached_block_id = current_block_id
+    cached_weights = weights
+    
     return weights
-
 
 async def _get_solutions_by_challenge(state: State):
     solutions_by_challenge = {}
