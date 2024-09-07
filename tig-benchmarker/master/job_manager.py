@@ -5,6 +5,7 @@ from master.data import *
 from master.utils import *
 from collections import Counter
 import time
+import math
 
 last_regular_draw_time = time.time()
 
@@ -67,6 +68,9 @@ async def _execute(state: State):
     )
     print(f"[job_manager] jobs counter: {job_counter}")
     new_jobs = []
+
+    weights = await _calibrate_challenges(state)
+    
     for challenge_name, selected_algorithms in JOBS.items():
         challenge_id = challenge_map[challenge_name]
         for algorithm_name, job_config in selected_algorithms.items():
@@ -75,7 +79,11 @@ async def _execute(state: State):
             num_jobs = job_counter[f"{challenge_name}_{algorithm_name}"]
             if num_jobs >= job_config["num_jobs"]:
                 continue
+
             weight = job_config["weight"]
+            if AUTO_CALIBRATE_CHALLENGES:
+                weight = weights.get(challenge_id, 1)
+                
             download_url = wasms[algorithm_id].details.download_url
             assert download_url is not None, f"Download URL for algorithm '{algorithm_id}' is None"
             timestamps = Timestamps(
@@ -98,7 +106,7 @@ async def _execute(state: State):
                     difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
                 
                 benchmark_id = f"{challenge_name}_{algorithm_name}_{difficulty[0]}_{difficulty[1]}_{now()}"
-                print(f"[job_manager] job: {benchmark_id} CREATED")
+                print(f"[job_manager] job: {benchmark_id} CREATED with weight {weight}")
                 job = Job(
                     download_url=download_url,
                     benchmark_id=benchmark_id,
@@ -119,3 +127,23 @@ async def _execute(state: State):
                 new_jobs.append(job)
 
     available_jobs.update({job.benchmark_id: job for job in new_jobs})
+    
+async def _calibrate_challenges(state: State):
+    num_qualifiers_by_challenge = state.query_data.player.block_data.num_qualifiers_by_challenge or {}
+    weights = {challenge_id: 1 for challenge_id in num_qualifiers_by_challenge}
+    if AUTO_CALIBRATE_CHALLENGES:
+        total_solutions = sum(num_qualifiers_by_challenge.values())
+        if total_solutions > 0:
+            min_proportion = None   
+            for challenge_id, num_solutions in num_qualifiers_by_challenge.items():
+                challenge_proportion = num_solutions / total_solutions if total_solutions > 0 else 0
+                weight = 1 / (challenge_proportion + 0.01)
+                weights[challenge_id] = weight
+                if min_proportion is None or weight < min_proportion:
+                    min_proportion = weight
+            if min_proportion > 0:
+                for challenge_id in weights:
+                    weights[challenge_id] = math.ceil(weights[challenge_id] / min_proportion)
+                    if weights[challenge_id] > 1:
+                        weights[challenge_id] = math.ceil(weights[challenge_id] * 1.1)
+    return weights
