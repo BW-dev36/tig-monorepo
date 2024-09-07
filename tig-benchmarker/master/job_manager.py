@@ -4,6 +4,9 @@ from master.config import *
 from master.data import *
 from master.utils import *
 from collections import Counter
+import time
+
+last_regular_draw_time = time.time()
 
 async def run(state: State):
     while True:
@@ -17,6 +20,7 @@ async def run(state: State):
             await asyncio.sleep(5)
 
 async def _execute(state: State):
+    global last_regular_draw_time
     block = state.query_data.block
     challenges = state.query_data.challenges
     algorithms = state.query_data.algorithms
@@ -80,8 +84,19 @@ async def _execute(state: State):
                 submit=n + job_config["benchmark_duration"] + job_config["wait_slave_duration"]
             )
             for _ in range(job_config["num_jobs"] - num_jobs):
-                # FIXME use difficulty sampler
-                difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
+                
+                if ACTIVATE_DIFFICULTIES_OPTIMIZATION:
+                    if time.time() - last_regular_draw_time >= DIFFICULTIES_REGULAR_PERIOD:
+                        difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
+                        last_regular_draw_time = time.time()
+                    else:
+                        sorted_difficulties = sorted(challenges[challenge_id].block_data.qualifier_difficulties, key=lambda x: (x[0], x[1]))
+                        ten_percent_index = max(1, len(sorted_difficulties) // DIFFICULTIES_SUBSET_PERCENTAGE)
+                        difficulty = random.choice(sorted_difficulties[:ten_percent_index])
+                else:
+                    # FIXME use difficulty sampler
+                    difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
+                
                 benchmark_id = f"{challenge_name}_{algorithm_name}_{difficulty[0]}_{difficulty[1]}_{now()}"
                 print(f"[job_manager] job: {benchmark_id} CREATED")
                 job = Job(
