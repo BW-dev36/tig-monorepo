@@ -266,7 +266,7 @@ fn filter_relevant_vectors<'a>(
     result
 }
 
-pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
+pub fn solve_challenge_outbound(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let query_count = challenge.query_vectors.len();
 
     let subset_size = match query_count {

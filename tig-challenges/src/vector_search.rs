@@ -31,6 +31,7 @@ impl DifficultyTrait<2> for Difficulty {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[derive(PartialEq)]
 pub struct Solution {
     pub indexes: Vec<usize>,
 }
@@ -77,6 +78,11 @@ impl ChallengeTrait<Solution, Difficulty, 2> for Challenge {
         // TIG dev bounty available for a GPU optimisation for instance generation!
         Self::generate_instance(seeds, difficulty)
     }
+
+    //#[cfg(feature = "native")]
+    // fn generate_instance_native(seeds: [u64; 8], difficulty: &Difficulty) -> Result<Self> {
+    //     Ok(self);
+    // }
 
     fn generate_instance(seeds: [u64; 8], difficulty: &Difficulty) -> Result<Self> {
         let mut rngs = RngArray::new(seeds);
@@ -128,5 +134,51 @@ impl ChallengeTrait<Solution, Difficulty, 2> for Challenge {
             ));
         }
         Ok(())
+    }
+}
+
+pub fn convert_vsochallenge_to_challenge(vso_challenge: *const tig_native::vector_search::VSOChallenge) -> Challenge {
+    unsafe {
+        // Déréférencer le pointeur
+        let challenge_ref = &*vso_challenge;
+
+        // Conversion du tableau de seeds
+        let seeds = challenge_ref.seeds;
+
+        // Conversion de difficulty
+        let difficulty = Difficulty {
+            num_queries: challenge_ref.difficulty.num_queries,
+            better_than_baseline: challenge_ref.difficulty.better_than_baseline,
+        };
+
+        // Conversion de vector_database (pointeurs bruts vers Vec<Vec<f32>>)
+        let vector_database = (0..challenge_ref.vector_database_size)
+            .map(|i| {
+                let vec_ptr = challenge_ref.vector_database.add(i);
+                let vec = std::slice::from_raw_parts(*vec_ptr, 250); // Taille fixe de 250
+                vec.to_vec() // Convertir le slice en Vec<f32>
+            })
+            .collect::<Vec<Vec<f32>>>();
+
+        // Conversion de query_vectors (pointeurs bruts vers Vec<Vec<f32>>)
+        let query_vectors = (0..challenge_ref.query_vectors_size)
+            .map(|i| {
+                let query_ptr = challenge_ref.query_vectors.add(i);
+                let vec = std::slice::from_raw_parts(*query_ptr, 250); // Taille fixe de 250
+                vec.to_vec() // Convertir le slice en Vec<f32>
+            })
+            .collect::<Vec<Vec<f32>>>();
+
+        // Conversion de max_distance
+        let max_distance = challenge_ref.max_distance;
+
+        // Retourner l'objet Challenge
+        Challenge {
+            seeds,
+            difficulty,
+            vector_database,
+            query_vectors,
+            max_distance,
+        }
     }
 }

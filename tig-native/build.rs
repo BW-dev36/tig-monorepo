@@ -75,9 +75,9 @@ fn main() {
 
 
     println!("cargo:rustc-link-search=native={}", build_dir.to_str().unwrap());
-    println!("cargo:rustc-link-lib=cpp_cuda");
+    //println!("cargo:rustc-link-lib={}/libcpp_cuda.a", build_dir.to_str().unwrap());
     println!("cargo:rerun-if-changed={}/knapmaxxing.cu", src_dir_str);
-    println!("cargo:rustc-link-search=native=/usr/lib/gcc/x86_64-linux-gnu/12/");
+    //println!("cargo:rustc-link-search=native=/usr/lib/gcc/x86_64-linux-gnu/12/");
     println!("cargo:rustc-link-lib=dylib=stdc++");
     // Lien vers la bibliothèque construite
     // println!("cargo:rustc-link-search=native={}", output_dir);

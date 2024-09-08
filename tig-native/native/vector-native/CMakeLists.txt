@@ -13,7 +13,6 @@ endif()
 set(PROJECT_NAME vector_search)
 # Shared library
 add_library(${PROJECT_NAME} STATIC
-    bacalhau_v1.cpp
     optimax_native.cpp
 )
 

@@ -3,6 +3,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+
 #[cfg(feature = "cuda")]
 use cudarc::driver::*;
 #[cfg(feature = "cuda")]
@@ -81,6 +82,9 @@ where
 
 pub mod knapsack;
 pub use knapsack as c003;
+pub mod knapsack_test;
+pub use knapsack_test as c003_test;
+
 pub mod satisfiability;
 pub use satisfiability as c001;
 pub mod vector_search;

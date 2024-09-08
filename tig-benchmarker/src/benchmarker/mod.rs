@@ -9,11 +9,21 @@ mod setup_jobs;
 mod submit_benchmark;
 mod submit_proof;
 
+#[cfg(feature = "native")]
+#[cfg(not(feature = "cuda"))]
+#[path = "native_run_benchmark.rs"]
+pub mod run_benchmark;
+
+#[cfg(not(feature = "native"))]
 #[cfg(not(feature = "cuda"))]
 pub mod run_benchmark;
 #[cfg(feature = "cuda")]
+#[cfg(not(feature = "native"))]
 #[path = "cuda_run_benchmark.rs"]
 pub mod run_benchmark;
+
+
+
 
 use crate::utils::{sleep, time, Result};
 use difficulty_sampler::DifficultySampler;

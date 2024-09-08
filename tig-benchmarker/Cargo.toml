@@ -22,7 +22,9 @@ rand_distr = { version = "0.4.3", default-features = false, features = [
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0.113" }
+tig-native = { path = "../tig-native", optional = true }
 tig-algorithms = { path = "../tig-algorithms" }
+
 tig-api = { path = "../tig-api", features = ["request"] }
 tig-challenges = { path = "../tig-challenges" }
 tig-structs = { path = "../tig-structs" }
@@ -31,13 +33,12 @@ tig-worker = { path = "../tig-worker" }
 tokio = { version = "1.37.0", features = ["full"] }
 warp = { version = "0.3.7" }
 
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["standalone"]
+default = ["standalone", "native"]
 cuda = ["cudarc", "tig-algorithms/cuda"]
 standalone = []
+native = ["tig-native"]
 
 c001_a001 = []
 satisfiability_schnoing = ["c001_a001"]

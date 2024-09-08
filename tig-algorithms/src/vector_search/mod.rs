@@ -23,53 +23,186 @@
 // c004_a012
 
 // c004_a013
-
-pub mod brute_force_bacalhau;
-pub use brute_force_bacalhau as c004_a014;
-
-
 pub mod optimax_gpu;
 pub use optimax_gpu as c004_a026;
 
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use tig_challenges::{vector_search::*, *};
+    use tig_native::{vector_search::*, *};
+    
+    pub fn convert_vsochallenge_to_challenge(vso_challenge: *const VSOChallenge) -> Challenge {
+        unsafe {
+            // Déréférencer le pointeur
+            let challenge_ref = &*vso_challenge;
+    
+            // Conversion du tableau de seeds
+            let seeds = challenge_ref.seeds;
+    
+            // Conversion de difficulty
+            let difficulty = Difficulty {
+                num_queries: challenge_ref.difficulty.num_queries,
+                better_than_baseline: challenge_ref.difficulty.better_than_baseline,
+            };
+    
+            // Conversion de vector_database (pointeurs bruts vers Vec<Vec<f32>>)
+            let vector_database = (0..challenge_ref.vector_database_size)
+                .map(|i| {
+                    let vec_ptr = challenge_ref.vector_database.add(i);
+                    let vec = std::slice::from_raw_parts(*vec_ptr, 250); // Taille fixe de 250
+                    vec.to_vec() // Convertir le slice en Vec<f32>
+                })
+                .collect::<Vec<Vec<f32>>>();
+    
+            // Conversion de query_vectors (pointeurs bruts vers Vec<Vec<f32>>)
+            let query_vectors = (0..challenge_ref.query_vectors_size)
+                .map(|i| {
+                    let query_ptr = challenge_ref.query_vectors.add(i);
+                    let vec = std::slice::from_raw_parts(*query_ptr, 250); // Taille fixe de 250
+                    vec.to_vec() // Convertir le slice en Vec<f32>
+                })
+                .collect::<Vec<Vec<f32>>>();
+    
+            // Conversion de max_distance
+            let max_distance = challenge_ref.max_distance;
+    
+            // Retourner l'objet Challenge
+            Challenge {
+                seeds,
+                difficulty,
+                vector_database,
+                query_vectors,
+                max_distance,
+            }
+        }
+    }
+
+    
+    #[test]
+    fn test_vector_search_with_varying_difficulties_and_seeds() {
+        // Plage des valeurs de difficulté
+        let num_queries_range = 80..=81;
+        let baseline_range = 450..=450;
+        
+        // Plage des seeds à utiliser
+        let seed_variants: Vec<[u64; 8]> = vec![
+            [323437; 8],
+            [42; 8],
+            [987654321; 8],
+            // [123456789; 8],
+            // [98765; 8],
+        ];
+
+        for seed in seed_variants {
+            println!("Testing with seed: {:?}", seed);
+            for num_queries in num_queries_range.clone() {
+                for baseline in baseline_range.clone() {
+                    // Créer la difficulté courante
+                    let difficulty = Difficulty {
+                        num_queries,
+                        better_than_baseline: baseline,
+                    };
+
+                    // Générer le challenge
+                    // Conversion de `challenge.difficulty` en `VSODifficulty`
+                    let vs_difficulty = VSODifficulty {
+                        num_queries: num_queries,
+                        better_than_baseline: baseline,
+                    };
+
+                    let challenge = unsafe {
+                        tig_native::vector_search::generate_instance_vs(seed.as_ptr(), &vs_difficulty as *const _)
+                    };
+                    
+                    if challenge.is_null() {
+                        // Gérer l'erreur si le pointeur est nul
+                        panic!("Le challenge renvoyé par la fonction C++ est nul !");
+                    }
+                    let rust_challenge = convert_vsochallenge_to_challenge(challenge);
+
+                    println!("Running test for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+
+                    // Appeler la méthode `solve_challenge`
+                    let solution_opt = optimax_gpu::solve_challenge_native(challenge);
+
+                  
+                    let solution_outbound_opt = optimax_gpu::solve_challenge_outbound(&rust_challenge);
+
+                    match (solution_opt, solution_outbound_opt) {
+                        (Ok(Some(solution)), Ok(Some(solution_outbound))) => {
+                            // Vérification que les solutions des deux méthodes sont équivalentes
+                            assert_eq!(solution, solution_outbound, "Solutions differ between solve_challenge and solve_challenge_outbound!");
+
+                            // Vérifier si la solution est valide
+                            match rust_challenge.verify_solution(&solution) {
+                                Ok(_) => println!("Valid solution for num_queries: {}, better_than_baseline: {}", num_queries, baseline),
+                                Err(e) => println!("Invalid solution for num_queries: {}, better_than_baseline: {}: {}", num_queries, baseline, e),
+                            }
+                        }
+                        (Ok(None), Ok(None)) => {
+                            println!("No solution found for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                        }
+                        (Err(e), _) | (_, Err(e)) => {
+                            println!("Algorithm error for num_queries: {}, better_than_baseline: {}: {}", num_queries, baseline, e);
+                        }
+                        _ => {
+                            panic!("Mismatch in results between solve_challenge and solve_challenge_outbound for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                        }
+                    };
+                }
+            }
+        }
+    }
 
     #[test]
-    fn test_vector_search() {
-        let difficulty = Difficulty {
-            // Uncomment the relevant fields.
-            // Modify the values for different difficulties
+    fn test_full_vector_search() {
+        // Plage des valeurs de difficulté
+        let num_queries_range = 80..=81;
+        let baseline_range = 450..=450;
+        
+        // Plage des seeds à utiliser
+        let seed_variants: Vec<[u64; 8]> = vec![
+            [323437; 8],
+            [42; 8],
+            [987654321; 8],
+            // [123456789; 8],
+            // [98765; 8],
+        ];
 
-            // -- satisfiability --
-            // num_variables: 50,
-            // clauses_to_variables_percent: 300,
+        for seed in seed_variants {
+            println!("Testing with seed: {:?}", seed);
+            for num_queries in num_queries_range.clone() {
+                for baseline in baseline_range.clone() {
+                    let vs_difficulty = VSODifficulty {
+                        num_queries: num_queries,
+                        better_than_baseline: baseline,
+                    };
 
-            // -- vehicle_routing --
-            // num_nodes: 40,
-            // better_than_baseline: 250,
+                    println!("Running test for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                    let challenge = unsafe {
+                        tig_native::vector_search::solve_optimax_cpp_full(seed.as_ptr(), &vs_difficulty as *const _)
+                    };
 
-            // -- knapsack --
-            // num_items: 50,
-            // better_than_baseline: 10,
-
-            //-- vector_search --
-            num_queries: 45,
-            better_than_baseline: 520,
-        };
-        let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
-        let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
-        println!("Running test ...");
-        match optimax_gpu::solve_challenge(&challenge) {
-            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
-                Ok(_) => println!("Valid solution"),
-                Err(e) => println!("Invalid solution: {}", e),
-            },
-            Ok(None) => println!("No solution"),
-            Err(e) => println!("Algorithm error: {}", e),
-        };
+                    match challenge {
+                        0 => {
+                            println!("Valid solution for num_queries: {}, better_than_baseline: {}", num_queries, baseline)
+                        }
+                        1 => {
+                            println!("No solution found for num_queries: {}, better_than_baseline: {} --> nb indexes missmatch the number of queries", num_queries, baseline);
+                        }
+                        2 => {
+                            println!("Algorithm error for num_queries: {}, better_than_baseline: {} --> out of bound", num_queries, baseline);
+                        }
+                        3 => {
+                            println!("Mismatch in results between solve_challenge and solve_challenge_outbound for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                        }
+                        v => {
+                            panic!("Unkown value returned : {}", v);
+                        }
+                    };
+                }
+            }
+        }
     }
 }
 
@@ -117,7 +250,7 @@ mod cuda_tests {
                 HashMap::new()
             }
         };
-        let algorithm_cuda_funcs = match &optimax_search::KERNEL {
+        let algorithm_cuda_funcs = match &optimax_gpu::KERNEL {
             Some(kernel) => load_cuda_functions(&dev, &kernel, "algorithm"),
             None => {
                 println!("No CUDA kernel for algorithm");

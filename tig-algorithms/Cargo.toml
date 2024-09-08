@@ -5,7 +5,6 @@ readme = "README.md"
 authors.workspace = true
 repository.workspace = true
 edition.workspace = true
-build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.81"
@@ -15,6 +14,7 @@ cudarc = { version = "0.12.0", features = [
 ndarray = "0.15.6"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 tig-challenges = { path = "../tig-challenges" }
+tig-native = { path = "../tig-native" , optional = true  }
 rust_lib = { path = "../rust_wrapper/rust_lib" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
@@ -26,4 +26,6 @@ libc = "0.2"
 crate-type = ["cdylib", "rlib", "staticlib"]
 
 [features]
+default = ["tig-native"]
 cuda = ["cudarc", "tig-challenges/cuda"]
+native = ["tig-native"]

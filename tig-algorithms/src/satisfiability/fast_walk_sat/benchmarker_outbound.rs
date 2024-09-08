@@ -240,8 +240,8 @@ mod gpu_optimisation {
     // Important! your GPU and CPU version of the algorithm should return the same result
     pub fn cuda_solve_challenge(
         challenge: &Challenge,
-        dev: &Arc<CudaDevice>,
-        mut funcs: HashMap<&'static str, CudaFunction>,
+        _dev: &Arc<CudaDevice>,
+        mut _funcs: HashMap<&'static str, CudaFunction>,
     ) -> anyhow::Result<Option<Solution>> {
         solve_challenge(challenge)
     }

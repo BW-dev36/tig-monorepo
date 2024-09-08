@@ -37,6 +37,7 @@ if (ENABLE_CUDA)
     find_package(CUDAToolkit)
 endif()
 
+add_subdirectory(challenges)
 add_subdirectory(knapsack-native)
 add_subdirectory(sat-native)
 add_subdirectory(clarke-native)
@@ -55,6 +56,7 @@ set_target_properties(rust_lib PROPERTIES
 
 # Shared library
 add_library(cpp_cuda STATIC 
+                $<TARGET_OBJECTS:challenges>
                 $<TARGET_OBJECTS:knapsack_gpu>
                 $<TARGET_OBJECTS:sat_gpu>
                 $<TARGET_OBJECTS:clarke_gpu>

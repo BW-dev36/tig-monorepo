@@ -4,6 +4,7 @@ members = [
     "tig-api",
     "tig-benchmarker",
     "tig-challenges",
+    "tig-native",
     "tig-protocol",
     "tig-structs",
     "tig-utils",

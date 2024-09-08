@@ -1,14 +1,17 @@
 use super::{Job, NonceIterator};
 use crate::utils;
 use std::sync::Arc;
+use tig_native::vector_search::*;
 use tig_algorithms::{c001, c002, c003, c004};
 use tig_challenges::ChallengeTrait;
 use tig_worker::{compute_solution, verify_solution};
+use tig_worker::{native_compute_solution, native_verify_solution};
 use tokio::{spawn, sync::Mutex, task::yield_now};
 use utils::time;
-
+use anyhow::{anyhow, Result};
 
 pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job, wasm: &Vec<u8>) {
+    println!("Running WOOOOOORRRRRLLD\n");
     for nonce_iterator in nonce_iterators {
         let job = job.clone();
         let wasm = wasm.clone();
@@ -134,54 +137,70 @@ pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job,
                             }
                             "c004" => {
                                 type SolveChallengeFn =
-                                    fn(
-                                        &tig_challenges::c004::Challenge,
+                                    unsafe extern "C" fn(
+                                        seeds: *const u64, difficulty: *const VSODifficulty
                                     )
-                                        -> anyhow::Result<Option<tig_challenges::c004::Solution>>;
+                                        -> u32;
                                 match match job.settings.algorithm_id.as_str() {
-                                    #[cfg(feature = "c004_a014")]
-                                    "c004_a014" => Some(c004::c004_a014::solve_challenge as SolveChallengeFn),
+                                    // #[cfg(feature = "c004_a014")]
+                                    // "c004_a014" => Some(c004::c004_a014::solve_challenge as SolveChallengeFn),
                                     #[cfg(feature = "c004_a026")]
-                                    "c004_a026" => Some(c004::c004_a026::solve_challenge as SolveChallengeFn),
+                                    "c004_a026" => Some(tig_native::vector_search::solve_optimax_cpp_full as SolveChallengeFn),
                                     
                                     
                                     _ => Option::<SolveChallengeFn>::None,
                                 } {
-                                    Some(solve_challenge) => {
-                                        let challenge =
-                                            tig_challenges::c004::Challenge::generate_instance_from_vec(
-                                                seeds,
-                                                &job.settings.difficulty,
-                                            )
-                                            .unwrap();
-                                        match solve_challenge(&challenge) {
-                                            Ok(Some(solution)) => {
-                                                challenge.verify_solution(&solution).is_err()
-                                            }
-                                            _ => true,
-                                        }
+                                        Some(solve_challenge) => {
+                                            let vec_diff =  &job.settings.difficulty;
+                                            let vs_difficulty = VSODifficulty {
+                                                num_queries: vec_diff.get(0).unwrap().clone() as u32,
+                                                better_than_baseline: vec_diff.get(1).unwrap().clone() as u32,
+                                            };
+                                            let is_valid = unsafe { solve_challenge(seeds.as_ptr(), &vs_difficulty)};
+                                                match is_valid {
+                                                    0 => {
+                                                        //println!("Valid solution for num_queries: {}, better_than_baseline: {}", vs_difficulty.num_queries, vs_difficulty.baseline);
+                                                        false
+                                                    }
+                                                    1 => {
+                                                        //println!("No solution found for num_queries: {}, better_than_baseline: {} --> nb indexes missmatch the number of queries", num_queries, baseline);
+                                                        true
+                                                    }
+                                                    2 => {
+                                                        //println!("Algorithm error for num_queries: {}, better_than_baseline: {} --> out of bound", num_queries, baseline);
+                                                        true
+                                                    },
+                                                    3 => {
+                                                        //println!("Mismatch in results between solve_challenge and solve_challenge_outbound for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                                                        true
+                                                    },
+                                                    _v => {
+                                                        //println!("Unkown value returned : {}", v);
+                                                        true
+                                                    }
+                                                    
+                                                }
+                                        },
+                                        None => false,
                                     }
-                                    None => false,
-                                }
-                            }
+                                },
                             _ => panic!("Unknown challenge id: {}", job.settings.challenge_id),
                         };
+
+
                         if skip {
                             continue;
                         }
 
-
-
-
                         
-                        if let Ok(Some(solution_data)) = compute_solution(
+                        if let Ok(Some(solution_data)) = native_compute_solution(
                             &job.settings,
                             nonce,
                             wasm.as_slice(),
                             job.wasm_vm_config.max_memory,
                             job.wasm_vm_config.max_fuel,
                         ) {
-                            if verify_solution(&job.settings, nonce, &solution_data.solution)
+                            if native_verify_solution(&job.settings, nonce, &solution_data.solution)
                                 .is_ok()
                             {
                                 if solution_data.calc_solution_signature()

@@ -12,29 +12,13 @@ under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
 language governing permissions and limitations under the License.
 */
-
+use tig_native::*;
 use tig_challenges::vehicle_routing::*;
 use std::ffi::c_void;
 use std::os::raw::{c_int, c_uint};
 use std::ptr;
 
-#[repr(C)]
-struct CWChallenge {
-    seed: u64,
-    demands: *const c_int,
-    distance_matrix: *const c_int,
-    max_total_distance: c_int,
-    max_capacity: c_int,
-    num_nodes: c_uint,
-}
-
-#[repr(C)]
-struct CWSolution {
-    routes: *mut *mut c_int,
-    route_lengths: *mut c_int,
-    num_routes: c_int,
-}
-
+#[link(name = "cpp_cuda")]
 extern "C" {
     fn solve_clarke_wright_v1_cpp(challenge: *const CWChallenge, solution: *mut CWSolution);
 }
