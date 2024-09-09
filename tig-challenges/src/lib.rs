@@ -82,8 +82,6 @@ where
 
 pub mod knapsack;
 pub use knapsack as c003;
-pub mod knapsack_test;
-pub use knapsack_test as c003_test;
 
 pub mod satisfiability;
 pub use satisfiability as c001;
