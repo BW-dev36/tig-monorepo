@@ -5,10 +5,10 @@ from master.data import *
 from master.utils import *
 from collections import Counter
 import time
-import math
 
 cached_block_id = None
 cached_weights = None
+cached_max_weight_challenge_id = None
 last_regular_draw_time = time.time()
 
 async def run(state: State):
@@ -78,31 +78,37 @@ async def _execute(state: State):
         for algorithm_name, job_config in selected_algorithms.items():
             algorithm_id = algorithm_map.get(f"{challenge_id}_{algorithm_name}", None)
             assert algorithm_id is not None, f"Algorithm '{algorithm_name}' for challenge '{challenge_name}' does not exist"
+            
+            custom_num_jobs = _get_num_jobs(weights, job_config, challenge_id)
             num_jobs = job_counter[f"{challenge_name}_{algorithm_name}"]
-            if num_jobs >= job_config["num_jobs"]:
+            if num_jobs >= custom_num_jobs:
                 continue
 
-            weight = job_config["weight"]
-            if AUTO_CALIBRATE_CHALLENGES:
-                weight = weights.get(challenge_id, 1)
+            weight = await _get_weight(weights, job_config, challenge_id)
+            duration = await _get_duration(weights, job_config, challenge_id)
                 
             download_url = wasms[algorithm_id].details.download_url
             assert download_url is not None, f"Download URL for algorithm '{algorithm_id}' is None"
             timestamps = Timestamps(
                 start=n,
-                end=n + job_config["benchmark_duration"],
-                submit=n + job_config["benchmark_duration"] + job_config["wait_slave_duration"]
+                end=n + duration,
+                submit=n + duration + job_config["wait_slave_duration"]
             )
-            for _ in range(job_config["num_jobs"] - num_jobs):
+            for _ in range(custom_num_jobs - num_jobs):
                 
                 if ACTIVATE_DIFFICULTIES_OPTIMIZATION:
                     if time.time() - last_regular_draw_time >= DIFFICULTIES_REGULAR_PERIOD:
                         difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
                         last_regular_draw_time = time.time()
                     else:
-                        sorted_difficulties = sorted(challenges[challenge_id].block_data.qualifier_difficulties, key=lambda x: (x[0], x[1]))
-                        ten_percent_index = max(1, len(sorted_difficulties) // DIFFICULTIES_SUBSET_PERCENTAGE)
-                        difficulty = random.choice(sorted_difficulties[:ten_percent_index])
+                        ratios = [d[0] / d[1] if d[1] != 0 else float('inf') for d in challenges[challenge_id].block_data.qualifier_difficulties]
+                        ratios_array = np.array(ratios)
+                        q1 = np.percentile(ratios_array, 25)
+                        q3 = np.percentile(ratios_array, 75)
+
+                        middle_difficulties = [d for d in challenges[challenge_id].block_data.qualifier_difficulties if q1 <= d[0] / d[1] <= q3]
+
+                        difficulty = random.choice(middle_difficulties)                        
                 else:
                     # FIXME use difficulty sampler
                     difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
@@ -131,7 +137,7 @@ async def _execute(state: State):
     available_jobs.update({job.benchmark_id: job for job in new_jobs})
 
 async def _calibrate_challenges(state: State):
-    global cached_block_id, cached_weights
+    global cached_block_id, cached_weights, cached_max_weight_challenge_id
     
     current_block_id = state.query_data.block.id  
     
@@ -168,6 +174,7 @@ async def _calibrate_challenges(state: State):
             proportion_max = max_solutions / total_solutions
             proportion_second = second_max_solutions / total_solutions
             
+            challenge_with_most_solutions = None
             if len(challenges_with_max_solutions) == 1 and total_solutions > 0 and (proportion_max - proportion_second) > 0.2:
                 challenge_with_most_solutions = challenges_with_max_solutions[0]
                 weights[challenge_with_most_solutions] = 0
@@ -175,7 +182,11 @@ async def _calibrate_challenges(state: State):
             max_weight = max(weights.values())  
             for challenge_id in weights:
                 if weights[challenge_id] == 0 and challenge_id != challenge_with_most_solutions:
-                    weights[challenge_id] = max_weight * 2  
+                    weights[challenge_id] = max_weight * 2
+
+            
+            sorted_weights = sorted(weights.items(), key=lambda item: item[1], reverse=True)
+            cached_max_weight_challenge_id = sorted_weights[0][0]
     else:
         weights = {challenge_id: 1 for challenge_id in state.query_data.challenges}
     
@@ -194,3 +205,23 @@ async def _get_solutions_by_challenge(state: State):
         else:
             solutions_by_challenge[challenge_id] = num_solutions
     return solutions_by_challenge
+
+async def _get_weight(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+    weight = job_config["weight"]
+    if AUTO_CALIBRATE_CHALLENGES:
+        weight = round(weights.get(challenge_id, 1))
+    return weight
+    
+async def _get_duration(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+    global cached_max_weight_challenge_id
+    duration = job_config["benchmark_duration"]
+    if AUTO_CALIBRATE_CHALLENGES and challenge_id == cached_max_weight_challenge_id and weights.get(challenge_id, 1) > 1:
+        duration = round(duration * job_config["benchmark_duration_factor"] or 1)
+    return duration
+        
+async def _get_num_jobs(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+    global cached_max_weight_challenge_id
+    num_jobs = job_config["num_jobs"]
+    if AUTO_CALIBRATE_CHALLENGES and challenge_id == cached_max_weight_challenge_id and weights.get(challenge_id, 1) > 1:
+        num_jobs = round(num_jobs * job_config["num_jobs_factor"] or 1)
+    return num_jobs

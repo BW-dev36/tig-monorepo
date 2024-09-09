@@ -23,9 +23,9 @@ async def main():
         job_manager.run(state),
         data_fetcher.run(state),
         webserver.run(state),
-        recomputer.run(state),
-        benchmark_submitter.run(state),
-        proof_submitter.run(state)
+        #recomputer.run(state),
+        #benchmark_submitter.run(state),
+        #proof_submitter.run(state)
     ])
 
 if __name__ == "__main__":
