@@ -69,7 +69,7 @@ extern "C"
     }
 
     // Vérification de la solution
-    unsigned int verify_solution(const VSOChallenge *challenge, const VSOSolution *solution)
+    unsigned int verify_solution_vs(const VSOChallenge *challenge, const VSOSolution *solution)
     {
         if (solution->len != challenge->difficulty.num_queries)
         {

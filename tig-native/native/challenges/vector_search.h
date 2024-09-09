@@ -37,7 +37,7 @@ extern "C"
     };
     // Fonctions externes
     VSOChallenge *generate_instance_vs(const uint64_t * seeds, const VSODifficulty *difficulty);
-    unsigned int verify_solution(const VSOChallenge *challenge, const VSOSolution *solution);
+    unsigned int verify_solution_vs(const VSOChallenge *challenge, const VSOSolution *solution);
     void free_vso_challenge(VSOChallenge *challenge);
 
     void solve_optimax_cpp(const VSOChallenge *challenge, VSOSolution *solution);

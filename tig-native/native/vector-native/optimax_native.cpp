@@ -252,7 +252,7 @@ unsigned int solve_optimax_cpp_full(const uint64_t * seeds, const VSODifficulty 
     vsoSolution->len = 0;
 
     solve_optimax_cpp(challenge, vsoSolution);
-    int res = verify_solution(challenge, vsoSolution);
+    int res = verify_solution_vs(challenge, vsoSolution);
 
     free_vso_challenge(challenge);
 

@@ -60,7 +60,7 @@ KChallenge* generate_instance(const uint64_t * seeds, const KDifficulty& difficu
     return challenge;
 }
 
-int verify_solution(const KChallenge* challenge, const KSolution* solution) {
+int verify_solution_knap(const KChallenge* challenge, const KSolution* solution) {
     std::set<size_t> selected_items(solution->items.begin(), solution->items.end());
 
     if (selected_items.size() != solution->items.size()) {
