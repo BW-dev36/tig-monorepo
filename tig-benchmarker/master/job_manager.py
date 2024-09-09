@@ -140,72 +140,68 @@ async def _execute(state: State):
 def _calibrate_challenges(state: State):
     global cached_block_id, cached_weights, cached_max_weight_challenge_id
     
-    current_block_id = state.query_data.block.id  
+    current_block_id = state.query_data.block.id
     
     if cached_block_id == current_block_id and cached_weights is not None:
         return cached_weights
 
-    solutions_by_challenge = _get_solutions_by_challenge(state)    
+    solutions_by_challenge = _get_solutions_by_challenge(state)
     weights = {challenge_id: 0 for challenge_id in state.query_data.challenges}
-    
+
     if AUTO_CALIBRATE_CHALLENGES:
         total_solutions = sum(solutions_by_challenge.values())
         
         if total_solutions > 0:
-            min_proportion = None
+            min_proportion = float('inf')
             
             for challenge_id, num_solutions in solutions_by_challenge.items():
-                challenge_proportion = num_solutions / total_solutions if total_solutions > 0 else 0
+                challenge_proportion = num_solutions / total_solutions
                 weight = 1 / (challenge_proportion + 0.01)
                 weights[challenge_id] = weight
-                
-                if min_proportion is None or weight < min_proportion:
-                    min_proportion = weight
+                min_proportion = min(min_proportion, weight)
             
             if min_proportion > 0:
-                for challenge_id in weights:
-                    weights[challenge_id] = round(weights[challenge_id] / min_proportion)
+                weights = {challenge_id: round(weight / min_proportion) for challenge_id, weight in weights.items()}
             
-            sorted_solutions = sorted(solutions_by_challenge.values(), reverse=True)
-            max_solutions = sorted_solutions[0]
-            second_max_solutions = sorted_solutions[1] if len(sorted_solutions) > 1 else 0
+            max_solutions, second_max_solutions = _get_top_two_solution_counts(solutions_by_challenge)
+            challenge_with_most_solutions = _identify_dominant_challenge(solutions_by_challenge, total_solutions, max_solutions, second_max_solutions)
             
-            challenges_with_max_solutions = [challenge_id for challenge_id, num_solutions in solutions_by_challenge.items() if num_solutions == max_solutions]
-            
-            proportion_max = max_solutions / total_solutions
-            proportion_second = second_max_solutions / total_solutions
-            
-            challenge_with_most_solutions = None
-            if len(challenges_with_max_solutions) == 1 and total_solutions > 0 and (proportion_max - proportion_second) > 0.2:
-                challenge_with_most_solutions = challenges_with_max_solutions[0]
+            if challenge_with_most_solutions:
                 weights[challenge_with_most_solutions] = 0
             
-            max_weight = max(weights.values())  
-            for challenge_id in weights:
-                if weights[challenge_id] == 0 and challenge_id != challenge_with_most_solutions:
-                    weights[challenge_id] = max_weight * 2
-
+            max_weight = max(weights.values())
+            weights = {challenge_id: (max_weight * 2 if weight == 0 and challenge_id != challenge_with_most_solutions else weight)
+                       for challenge_id, weight in weights.items()}
             
-            sorted_weights = sorted(weights.items(), key=lambda item: item[1], reverse=True)
-            cached_max_weight_challenge_id = sorted_weights[0][0]
+            cached_max_weight_challenge_id = max(weights, key=weights.get)
     else:
         weights = {challenge_id: 1 for challenge_id in state.query_data.challenges}
-    
+
     cached_block_id = current_block_id
     cached_weights = weights
-    
+
     return weights
 
 def _get_solutions_by_challenge(state: State):
     solutions_by_challenge = {}
-    for id, benchmark in state.query_data.benchmarks.items():
+    for benchmark in state.query_data.benchmarks.values():
         challenge_id = benchmark.settings.challenge_id
-        num_solutions = benchmark.details.num_solutions
-        if challenge_id in solutions_by_challenge:
-            solutions_by_challenge[challenge_id] += num_solutions
-        else:
-            solutions_by_challenge[challenge_id] = num_solutions
+        solutions_by_challenge[challenge_id] = solutions_by_challenge.get(challenge_id, 0) + benchmark.details.num_solutions
     return solutions_by_challenge
+
+def _get_top_two_solution_counts(solutions_by_challenge):
+    sorted_solutions = sorted(solutions_by_challenge.values(), reverse=True)
+    max_solutions = sorted_solutions[0]
+    second_max_solutions = sorted_solutions[1] if len(sorted_solutions) > 1 else 0
+    return max_solutions, second_max_solutions
+
+def _identify_dominant_challenge(solutions_by_challenge, total_solutions, max_solutions, second_max_solutions):
+    proportion_max = max_solutions / total_solutions
+    proportion_second = second_max_solutions / total_solutions
+    challenges_with_max_solutions = [challenge_id for challenge_id, num_solutions in solutions_by_challenge.items() if num_solutions == max_solutions]
+    if len(challenges_with_max_solutions) == 1 and (proportion_max - proportion_second) > 0.2:
+        return challenges_with_max_solutions[0]
+    return None
 
 def _get_weight(weights: dict[str, int], job_config: dict[str, float], challenge_id):
     weight = job_config["weight"]
