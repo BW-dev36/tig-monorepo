@@ -5,6 +5,7 @@ from master.data import *
 from master.utils import *
 from collections import Counter
 import time
+import numpy as np
 
 cached_block_id = None
 cached_weights = None
@@ -71,7 +72,7 @@ async def _execute(state: State):
     print(f"[job_manager] jobs counter: {job_counter}")
     new_jobs = []
 
-    weights = await _calibrate_challenges(state)
+    weights = _calibrate_challenges(state)
     
     for challenge_name, selected_algorithms in JOBS.items():
         challenge_id = challenge_map[challenge_name]
@@ -84,8 +85,8 @@ async def _execute(state: State):
             if num_jobs >= custom_num_jobs:
                 continue
 
-            weight = await _get_weight(weights, job_config, challenge_id)
-            duration = await _get_duration(weights, job_config, challenge_id)
+            weight = _get_weight(weights, job_config, challenge_id)
+            duration = _get_duration(weights, job_config, challenge_id)
                 
             download_url = wasms[algorithm_id].details.download_url
             assert download_url is not None, f"Download URL for algorithm '{algorithm_id}' is None"
@@ -114,7 +115,7 @@ async def _execute(state: State):
                     difficulty = random.choice(challenges[challenge_id].block_data.qualifier_difficulties)
                 
                 benchmark_id = f"{challenge_name}_{algorithm_name}_{difficulty[0]}_{difficulty[1]}_{now()}"
-                print(f"[job_manager] job: {benchmark_id} CREATED with weight {weight}")
+                print(f"[job_manager] job: {benchmark_id} CREATED with weight {weight} and duration {duration}  and num_jobs {custom_num_jobs}")
                 job = Job(
                     download_url=download_url,
                     benchmark_id=benchmark_id,
@@ -136,7 +137,7 @@ async def _execute(state: State):
 
     available_jobs.update({job.benchmark_id: job for job in new_jobs})
 
-async def _calibrate_challenges(state: State):
+def _calibrate_challenges(state: State):
     global cached_block_id, cached_weights, cached_max_weight_challenge_id
     
     current_block_id = state.query_data.block.id  
@@ -144,7 +145,7 @@ async def _calibrate_challenges(state: State):
     if cached_block_id == current_block_id and cached_weights is not None:
         return cached_weights
 
-    solutions_by_challenge = await _get_solutions_by_challenge(state)    
+    solutions_by_challenge = _get_solutions_by_challenge(state)    
     weights = {challenge_id: 0 for challenge_id in state.query_data.challenges}
     
     if AUTO_CALIBRATE_CHALLENGES:
@@ -195,7 +196,7 @@ async def _calibrate_challenges(state: State):
     
     return weights
 
-async def _get_solutions_by_challenge(state: State):
+def _get_solutions_by_challenge(state: State):
     solutions_by_challenge = {}
     for id, benchmark in state.query_data.benchmarks.items():
         challenge_id = benchmark.settings.challenge_id
@@ -206,20 +207,20 @@ async def _get_solutions_by_challenge(state: State):
             solutions_by_challenge[challenge_id] = num_solutions
     return solutions_by_challenge
 
-async def _get_weight(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+def _get_weight(weights: dict[str, int], job_config: dict[str, float], challenge_id):
     weight = job_config["weight"]
     if AUTO_CALIBRATE_CHALLENGES:
         weight = round(weights.get(challenge_id, 1))
     return weight
     
-async def _get_duration(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+def _get_duration(weights: dict[str, int], job_config: dict[str, float], challenge_id):
     global cached_max_weight_challenge_id
     duration = job_config["benchmark_duration"]
     if AUTO_CALIBRATE_CHALLENGES and challenge_id == cached_max_weight_challenge_id and weights.get(challenge_id, 1) > 1:
         duration = round(duration * job_config["benchmark_duration_factor"] or 1)
     return duration
         
-async def _get_num_jobs(weights: dict[str, int], job_config: dict[str, float], challenge_id):
+def _get_num_jobs(weights: dict[str, int], job_config: dict[str, float], challenge_id):
     global cached_max_weight_challenge_id
     num_jobs = job_config["num_jobs"]
     if AUTO_CALIBRATE_CHALLENGES and challenge_id == cached_max_weight_challenge_id and weights.get(challenge_id, 1) > 1:
