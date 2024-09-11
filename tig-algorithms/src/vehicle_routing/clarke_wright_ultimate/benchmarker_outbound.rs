@@ -1,22 +1,39 @@
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::distributions::Bernoulli;
+use rand::prelude::Distribution;
+use rand::Rng;
+use rand::{rngs::StdRng, SeedableRng};
 use tig_challenges::vehicle_routing::*;
 
-const NUM_PERTURBATIONS: usize = 100;
-const PERTURBATION_DECAY: f32 = 0.9;
+const NUM_PERTURBATIONS: i32 = 30;
+const PERTURBATION_LIMIT: i32 = 15;
+const POPULATION_COUNT: usize = 20;
+const ROUNDS: usize = 30;
+const MUTATION_CHANCE: f64 = 0.1;
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let distance_matrix = &challenge.distance_matrix;
     let num_nodes = challenge.difficulty.num_nodes;
-    let baseline = challenge.difficulty.better_than_baseline;
+    let mut rng = StdRng::seed_from_u64(challenge.seeds[0] as u64);
 
-    let mut optimal_solution: Option<Solution> = None;
+    let mut best_solution: Option<Solution> = None;
     let mut minimum_cost: i32 = i32::MAX;
 
     let original_scores = compute_scores(distance_matrix, num_nodes);
+    let mut perturbation_limit = PERTURBATION_LIMIT;
 
-    {
+    for run in -1..NUM_PERTURBATIONS {
+        if run % 2 == 0 {
+            perturbation_limit += 2;
+        }
+
         let mut scores = original_scores.clone();
+        if run >= 0 {
+            for score in &mut scores {
+                let perturbation: i32 = rng.gen_range(-perturbation_limit..perturbation_limit);
+                score.0 += perturbation;
+            }
+            scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        }
         let mut solution = generate_initial_solution(challenge, &mut scores);
         solution = optimize_with_2_opt(solution, distance_matrix);
         let total_cost = compute_total_cost(&solution, distance_matrix);
@@ -24,47 +41,19 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         if total_cost < challenge.max_total_distance {
             return Ok(Some(solution));
         }
-
-        if total_cost < minimum_cost {
-            minimum_cost = total_cost;
-            optimal_solution = Some(solution);
-        }
-    }
-
-    let base_perturbation = determine_perturbation(num_nodes, baseline);
-    let mut current_perturbation = base_perturbation as f32;
-
-    for run in 0..NUM_PERTURBATIONS {
-        let mut rng = StdRng::seed_from_u64(
-            challenge.seeds[0] as u64 + NUM_PERTURBATIONS as u64 + run as u64,
+        update_best_solution(
+            &mut best_solution,
+            &mut minimum_cost,
+            (solution, total_cost),
         );
-
-        let mut scores = original_scores.clone();
-        for score in &mut scores {
-            let perturbation: i32 =
-                rng.gen_range((-current_perturbation as i32)..(current_perturbation as i32));
-            score.0 += perturbation;
-        }
-        scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-
-        let mut solution = generate_initial_solution(challenge, &mut scores);
-        solution = optimize_with_2_opt(solution, distance_matrix);
-        let total_cost = compute_total_cost(&solution, distance_matrix);
-
-        if total_cost < challenge.max_total_distance {
-            return Ok(Some(solution));
-        }
-
-        if total_cost < minimum_cost {
-            minimum_cost = total_cost;
-            optimal_solution = Some(solution);
-            current_perturbation *= PERTURBATION_DECAY;
-        } else {
-            current_perturbation = base_perturbation as f32;
-        }
     }
 
-    Ok(optimal_solution)
+    let genetic_solution = genetic_algorithm(&best_solution, minimum_cost, challenge, &mut rng);
+    if let Some(best_genetic_solution) = genetic_solution {
+        update_best_solution(&mut best_solution, &mut minimum_cost, best_genetic_solution);
+    }
+
+    Ok(best_solution)
 }
 
 fn compute_scores(distance_matrix: &Vec<Vec<i32>>, num_nodes: usize) -> Vec<(i32, usize, usize)> {
@@ -162,6 +151,148 @@ fn generate_initial_solution(
     }
 }
 
+fn genetic_algorithm(
+    best_solution: &Option<Solution>,
+    best_cost: i32,
+    challenge: &Challenge,
+    rng: &mut StdRng,
+) -> Option<(Solution, i32)> {
+    if let Some(first_solution) = best_solution {
+        let mut population: Vec<(Solution, i32)> = Vec::with_capacity(POPULATION_COUNT);
+
+        population.push((
+            Solution {
+                routes: first_solution.routes.clone(),
+            },
+            best_cost,
+        ));
+
+        for _ in 0..POPULATION_COUNT {
+            let random_solution = generate_random_solution(challenge, rng);
+            let random_solution_cost =
+                compute_total_cost(&random_solution, &challenge.distance_matrix);
+            population.push((random_solution, random_solution_cost));
+        }
+        population.sort_by_key(|&(_, cost)| cost);
+
+        for _ in 0..ROUNDS {
+            let parent1 = &population[0].0;
+            let parent2 = &population[1].0;
+
+            let mut offspring: Vec<(Solution, i32)> = Vec::new();
+            for _ in 0..((POPULATION_COUNT - 2) / 2) {
+                let (child1, child2) = crossover_and_mutate(parent1, parent2, challenge, rng);
+                let child1_cost = compute_total_cost(&child1, &challenge.distance_matrix);
+                let child2_cost = compute_total_cost(&child2, &challenge.distance_matrix);
+                offspring.push((child1, child1_cost));
+                offspring.push((child2, child2_cost));
+            }
+
+            population.extend(offspring);
+            population.sort_by_key(|&(_, cost)| cost);
+            population.truncate(2);
+        }
+
+        return population.into_iter().min_by_key(|&(_, cost)| cost);
+    }
+    None
+}
+
+fn generate_random_solution(challenge: &Challenge, rng: &mut StdRng) -> Solution {
+    let num_nodes = challenge.difficulty.num_nodes;
+    let mut routes: Vec<Vec<usize>> = Vec::with_capacity(num_nodes / 2);
+    let mut unvisited: Vec<usize> = (1..num_nodes).collect();
+
+    fn shuffle<T>(vec: &mut Vec<T>, rng: &mut StdRng) {
+        let len = vec.len();
+        for i in (1..len).rev() {
+            let j = rng.gen_range(0..=i);
+            if i != j {
+                vec.swap(i, j);
+            }
+        }
+    }
+    shuffle(&mut unvisited, rng);
+
+    let mut current_route: Vec<usize> = Vec::with_capacity(num_nodes);
+    current_route.push(0);
+
+    let mut current_capacity = challenge.max_capacity;
+
+    for &node in &unvisited {
+        let demand = challenge.demands[node];
+        if demand <= current_capacity {
+            current_route.push(node);
+            current_capacity -= demand;
+        } else {
+            current_route.push(0);
+            routes.push(current_route);
+
+            current_route = Vec::with_capacity(num_nodes);
+            current_route.push(0);
+            current_route.push(node);
+            current_capacity = challenge.max_capacity - demand;
+        }
+    }
+
+    current_route.push(0);
+    routes.push(current_route);
+
+    Solution { routes }
+}
+
+fn crossover_and_mutate(
+    parent1: &Solution,
+    parent2: &Solution,
+    challenge: &Challenge,
+    rng: &mut StdRng,
+) -> (Solution, Solution) {
+    let split_index = rng.gen_range(1..parent1.routes.len() - 1);
+
+    let mut child1_routes = parent1.routes[..split_index].to_vec();
+    child1_routes.extend_from_slice(&parent2.routes[split_index..]);
+
+    let mut child2_routes = parent2.routes[..split_index].to_vec();
+    child2_routes.extend_from_slice(&parent1.routes[split_index..]);
+
+    let mut child1 = Solution {
+        routes: child1_routes,
+    };
+    let mut child2 = Solution {
+        routes: child2_routes,
+    };
+
+    child1 = mutate(child1, &challenge.distance_matrix, rng);
+    child2 = mutate(child2, &challenge.distance_matrix, rng);
+
+    (child1, child2)
+}
+
+fn mutate(solution: Solution, distance_matrix: &Vec<Vec<i32>>, rng: &mut StdRng) -> Solution {
+    let mutation_distribution = Bernoulli::new(MUTATION_CHANCE).unwrap();
+    let mut mutated_solution = Solution {
+        routes: (solution.routes.clone()),
+    };
+
+    let mut mutated = false;
+    for route in &mut mutated_solution.routes {
+        if route.len() > 2 {
+            for i in 1..route.len() - 1 {
+                if mutation_distribution.sample(rng) {
+                    let swap_idx = rng.gen_range(1..route.len() - 1);
+                    route.swap(i, swap_idx);
+                    mutated = true;
+                }
+            }
+        }
+    }
+
+    if mutated {
+        return optimize_with_2_opt(mutated_solution, distance_matrix);
+    }
+    mutated_solution
+}
+
 fn optimize_with_2_opt(mut solution: Solution, distance_matrix: &Vec<Vec<i32>>) -> Solution {
     let mut improved = true;
 
@@ -202,13 +333,14 @@ fn compute_route_cost(route: &Vec<usize>, distance_matrix: &Vec<Vec<i32>>) -> i3
         .sum()
 }
 
-fn determine_perturbation(num_nodes: usize, baseline: u32) -> i32 {
-    match (num_nodes, baseline) {
-        (65..80, 300..=324) => 24,
-        (80..=94, 300..=324) => 17,
-        (95..=109, 300..=324) => 21,
-        (110..=125, 275..=299) => 10,
-        _ => 20,
+fn update_best_solution(
+    best_solution: &mut Option<Solution>,
+    minimum_cost: &mut i32,
+    candidate_solution: (Solution, i32),
+) {
+    if candidate_solution.1 < *minimum_cost {
+        *minimum_cost = candidate_solution.1;
+        *best_solution = Some(candidate_solution.0);
     }
 }
 
