@@ -1,19 +1,14 @@
-use rand::distributions::Bernoulli;
-use rand::prelude::Distribution;
-use rand::Rng;
-use rand::{rngs::StdRng, SeedableRng};
 use tig_challenges::vehicle_routing::*;
 
 const NUM_PERTURBATIONS: i32 = 30;
 const PERTURBATION_LIMIT: i32 = 15;
 const POPULATION_COUNT: usize = 20;
 const ROUNDS: usize = 30;
-const MUTATION_CHANCE: f64 = 0.1;
 
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let distance_matrix = &challenge.distance_matrix;
     let num_nodes = challenge.difficulty.num_nodes;
-    let mut rng = StdRng::seed_from_u64(challenge.seeds[0] as u64);
+    let mut rng = ChaCha8Rng::seed_from_u64(challenge.seeds[0] as u64);
 
     let mut best_solution: Option<Solution> = None;
     let mut minimum_cost: i32 = i32::MAX;
@@ -29,7 +24,7 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         let mut scores = original_scores.clone();
         if run >= 0 {
             for score in &mut scores {
-                let perturbation: i32 = rng.gen_range(-perturbation_limit..perturbation_limit);
+                let perturbation: i32 = rng.gen_range(-perturbation_limit..=perturbation_limit);
                 score.0 += perturbation;
             }
             scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));
@@ -155,7 +150,7 @@ fn genetic_algorithm(
     best_solution: &Option<Solution>,
     best_cost: i32,
     challenge: &Challenge,
-    rng: &mut StdRng,
+    rng: &mut ChaCha8Rng,
 ) -> Option<(Solution, i32)> {
     if let Some(first_solution) = best_solution {
         let mut population: Vec<(Solution, i32)> = Vec::with_capacity(POPULATION_COUNT);
@@ -198,12 +193,12 @@ fn genetic_algorithm(
     None
 }
 
-fn generate_random_solution(challenge: &Challenge, rng: &mut StdRng) -> Solution {
+fn generate_random_solution(challenge: &Challenge, rng: &mut ChaCha8Rng) -> Solution {
     let num_nodes = challenge.difficulty.num_nodes;
     let mut routes: Vec<Vec<usize>> = Vec::with_capacity(num_nodes / 2);
     let mut unvisited: Vec<usize> = (1..num_nodes).collect();
 
-    fn shuffle<T>(vec: &mut Vec<T>, rng: &mut StdRng) {
+    fn shuffle<T>(vec: &mut Vec<T>, rng: &mut ChaCha8Rng) {
         let len = vec.len();
         for i in (1..len).rev() {
             let j = rng.gen_range(0..=i);
@@ -245,9 +240,9 @@ fn crossover_and_mutate(
     parent1: &Solution,
     parent2: &Solution,
     challenge: &Challenge,
-    rng: &mut StdRng,
+    rng: &mut ChaCha8Rng,
 ) -> (Solution, Solution) {
-    let split_index = rng.gen_range(1..parent1.routes.len() - 1);
+    let split_index = rng.gen_range(1..=parent1.routes.len() - 2);
 
     let mut child1_routes = parent1.routes[..split_index].to_vec();
     child1_routes.extend_from_slice(&parent2.routes[split_index..]);
@@ -268,8 +263,7 @@ fn crossover_and_mutate(
     (child1, child2)
 }
 
-fn mutate(solution: Solution, distance_matrix: &Vec<Vec<i32>>, rng: &mut StdRng) -> Solution {
-    let mutation_distribution = Bernoulli::new(MUTATION_CHANCE).unwrap();
+fn mutate(solution: Solution, distance_matrix: &Vec<Vec<i32>>, rng: &mut ChaCha8Rng) -> Solution {
     let mut mutated_solution = Solution {
         routes: (solution.routes.clone()),
     };
@@ -278,8 +272,8 @@ fn mutate(solution: Solution, distance_matrix: &Vec<Vec<i32>>, rng: &mut StdRng)
     for route in &mut mutated_solution.routes {
         if route.len() > 2 {
             for i in 1..route.len() - 1 {
-                if mutation_distribution.sample(rng) {
-                    let swap_idx = rng.gen_range(1..route.len() - 1);
+                if rng.gen_range(1..=5) == 1 {
+                    let swap_idx = rng.gen_range(1..=route.len() - 2);
                     route.swap(i, swap_idx);
                     mutated = true;
                 }
@@ -343,6 +337,84 @@ fn update_best_solution(
         *best_solution = Some(candidate_solution.0);
     }
 }
+
+/************************************ */
+/************************************ */
+/************************************ */
+
+pub struct ChaCha8Rng {
+    state: [u32; 16],
+    index: usize,
+}
+
+impl ChaCha8Rng {
+    pub fn seed_from_u64(seed: u64) -> Self {
+        let mut state = [0u32; 16];
+        state[0] = 0x61707865;
+        state[1] = 0x3320646e;
+        state[2] = 0x79622d32;
+        state[3] = 0x6b206574;
+        state[4] = (seed & 0xFFFFFFFF) as u32;
+        state[5] = (seed >> 32) as u32;
+        ChaCha8Rng { state, index: 0 }
+    }
+
+    fn quarter_round(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
+        state[a] = state[a].wrapping_add(state[b]);
+        state[d] ^= state[a];
+        state[d] = state[d].rotate_left(16);
+
+        state[c] = state[c].wrapping_add(state[d]);
+        state[b] ^= state[c];
+        state[b] = state[b].rotate_left(12);
+
+        state[a] = state[a].wrapping_add(state[b]);
+        state[d] ^= state[a];
+        state[d] = state[d].rotate_left(8);
+
+        state[c] = state[c].wrapping_add(state[d]);
+        state[b] ^= state[c];
+        state[b] = state[b].rotate_left(7);
+    }
+
+    fn chacha8_rounds(&mut self) {
+        for _ in 0..8 {
+            Self::quarter_round(&mut self.state, 0, 4, 8, 12);
+            Self::quarter_round(&mut self.state, 1, 5, 9, 13);
+            Self::quarter_round(&mut self.state, 2, 6, 10, 14);
+            Self::quarter_round(&mut self.state, 3, 7, 11, 15);
+            Self::quarter_round(&mut self.state, 0, 5, 10, 15);
+            Self::quarter_round(&mut self.state, 1, 6, 11, 12);
+            Self::quarter_round(&mut self.state, 2, 7, 8, 13);
+            Self::quarter_round(&mut self.state, 3, 4, 9, 14);
+        }
+    }
+
+    pub fn gen_u32(&mut self) -> u32 {
+        if self.index == 0 {
+            self.chacha8_rounds();
+        }
+        let result = self.state[self.index];
+        self.index = (self.index + 1) % 16;
+        result
+    }
+
+    pub fn gen_range<T>(&mut self, range: std::ops::RangeInclusive<T>) -> T
+    where
+        T: Copy + PartialOrd + From<u8> + TryFrom<i64> + TryInto<i64>,
+    {
+        let low: i64 = (*range.start()).try_into().ok().unwrap();
+        let high: i64 = (*range.end()).try_into().ok().unwrap();
+        let diff = high - low;
+        let random_value = (self.gen_u32() as i64) % (diff + 1);
+        let result: i64 = low + random_value;
+        result.try_into().ok().unwrap()
+    }
+}
+
+/************************************ */
+/************************************ */
+/************************************ */
 
 #[cfg(feature = "cuda")]
 mod gpu_optimization {
