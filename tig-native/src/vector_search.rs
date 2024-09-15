@@ -24,6 +24,8 @@ pub struct VSOChallenge {
     pub max_distance: f32,
 }
 
+#[link(name = "stdc++")]
+#[link(name = "cpp_cuda")]
 extern "C" {
     pub fn solve_optimax_cpp(challenge: *const VSOChallenge, solution: *mut VSOSolution);
     pub fn generate_instance_vs(seeds: *const u64, difficulty: *const VSODifficulty) -> *mut VSOChallenge;

@@ -5,13 +5,12 @@ use tig_native::vector_search::*;
 use tig_algorithms::{c001, c002, c003, c004};
 use tig_challenges::ChallengeTrait;
 use tig_worker::{compute_solution, verify_solution};
-use tig_worker::{native_compute_solution, native_verify_solution};
 use tokio::{spawn, sync::Mutex, task::yield_now};
 use utils::time;
 use anyhow::{anyhow, Result};
 
 pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job, wasm: &Vec<u8>) {
-    println!("Running WOOOOOORRRRRLLD\n");
+    println!("Running native filtered code...\n");
     for nonce_iterator in nonce_iterators {
         let job = job.clone();
         let wasm = wasm.clone();
@@ -193,14 +192,14 @@ pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job,
                         }
 
                         
-                        if let Ok(Some(solution_data)) = native_compute_solution(
+                        if let Ok(Some(solution_data)) = compute_solution(
                             &job.settings,
                             nonce,
                             wasm.as_slice(),
                             job.wasm_vm_config.max_memory,
                             job.wasm_vm_config.max_fuel,
                         ) {
-                            if native_verify_solution(&job.settings, nonce, &solution_data.solution)
+                            if verify_solution(&job.settings, nonce, &solution_data.solution)
                                 .is_ok()
                             {
                                 if solution_data.calc_solution_signature()

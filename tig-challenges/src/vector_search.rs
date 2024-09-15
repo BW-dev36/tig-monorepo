@@ -31,7 +31,6 @@ impl DifficultyTrait<2> for Difficulty {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[derive(PartialEq)]
 pub struct Solution {
     pub indexes: Vec<usize>,
 }

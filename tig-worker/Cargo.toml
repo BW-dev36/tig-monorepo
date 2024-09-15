@@ -6,6 +6,7 @@ license = "https://github.com/tig-foundation/tig-monorepo/tree/main/docs/agreeme
 authors.workspace = true
 repository.workspace = true
 edition.workspace = true
+build = "build.rs"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

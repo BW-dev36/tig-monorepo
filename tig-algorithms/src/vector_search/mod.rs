@@ -28,23 +28,24 @@ pub use optimax_gpu as c004_a026;
 
 mod tests {
     use super::*;
+    use std::slice;
     use tig_challenges::{vector_search::*, *};
     use tig_native::{vector_search::*, *};
-    
+
     pub fn convert_vsochallenge_to_challenge(vso_challenge: *const VSOChallenge) -> Challenge {
         unsafe {
             // Déréférencer le pointeur
             let challenge_ref = &*vso_challenge;
-    
+
             // Conversion du tableau de seeds
             let seeds = challenge_ref.seeds;
-    
+
             // Conversion de difficulty
             let difficulty = Difficulty {
                 num_queries: challenge_ref.difficulty.num_queries,
                 better_than_baseline: challenge_ref.difficulty.better_than_baseline,
             };
-    
+
             // Conversion de vector_database (pointeurs bruts vers Vec<Vec<f32>>)
             let vector_database = (0..challenge_ref.vector_database_size)
                 .map(|i| {
@@ -53,7 +54,7 @@ mod tests {
                     vec.to_vec() // Convertir le slice en Vec<f32>
                 })
                 .collect::<Vec<Vec<f32>>>();
-    
+
             // Conversion de query_vectors (pointeurs bruts vers Vec<Vec<f32>>)
             let query_vectors = (0..challenge_ref.query_vectors_size)
                 .map(|i| {
@@ -62,10 +63,10 @@ mod tests {
                     vec.to_vec() // Convertir le slice en Vec<f32>
                 })
                 .collect::<Vec<Vec<f32>>>();
-    
+
             // Conversion de max_distance
             let max_distance = challenge_ref.max_distance;
-    
+
             // Retourner l'objet Challenge
             Challenge {
                 seeds,
@@ -77,13 +78,102 @@ mod tests {
         }
     }
 
-    
+    pub fn compare_solutions(solution1: &Solution, solution2: &Solution) {
+        assert_eq!(
+            solution1.indexes.len(),
+            solution2.indexes.len(),
+            "Les solutions ont des tailles différentes"
+        );
+
+        for (i, (&val1, &val2)) in solution1
+            .indexes
+            .iter()
+            .zip(solution2.indexes.iter())
+            .enumerate()
+        {
+            if val1 != val2 {
+                let delta = (val1 as isize - val2 as isize).abs();
+                panic!(
+                    "Les éléments à l'index {} sont différents: solution1[{}] = {}, solution2[{}] = {}, delta = {}",
+                    i, i, val1, i, val2, delta
+                );
+            }
+        }
+
+        println!("Les solutions sont identiques.");
+    }
+
+    pub fn compare_vsochallenge_with_challenge(
+        vso_challenge: &VSOChallenge,
+        challenge: &Challenge,
+    ) {
+        // Compare seeds
+        assert_eq!(vso_challenge.seeds, challenge.seeds, "Seeds mismatch!");
+
+        // Compare difficulty
+        assert_eq!(
+            vso_challenge.difficulty.num_queries, challenge.difficulty.num_queries,
+            "Difficulty.num_queries mismatch!"
+        );
+        assert_eq!(
+            vso_challenge.difficulty.better_than_baseline,
+            challenge.difficulty.better_than_baseline,
+            "Difficulty.better_than_baseline mismatch!"
+        );
+
+        // Compare vector_database sizes
+        assert_eq!(
+            vso_challenge.vector_database_size,
+            challenge.vector_database.len(),
+            "Vector database size mismatch!"
+        );
+
+        // Compare query_vectors sizes
+        assert_eq!(
+            vso_challenge.query_vectors_size,
+            challenge.query_vectors.len(),
+            "Query vectors size mismatch!"
+        );
+
+        // Compare vector_database contents
+        for i in 0..vso_challenge.vector_database_size {
+            let db_ptr = unsafe { *vso_challenge.vector_database.add(i) }; // Accéder au pointeur de la base de données
+            let db_slice =
+                unsafe { slice::from_raw_parts(db_ptr, challenge.vector_database[i].len()) }; // Créer une slice Rust à partir du pointeur C
+            assert_eq!(
+                db_slice,
+                &challenge.vector_database[i][..],
+                "Vector database content mismatch at index {}!",
+                i
+            );
+        }
+
+        // Compare query_vectors contents
+        for i in 0..vso_challenge.query_vectors_size {
+            let query_ptr = unsafe { *vso_challenge.query_vectors.add(i) }; // Accéder au pointeur des vecteurs de requête
+            let query_slice =
+                unsafe { slice::from_raw_parts(query_ptr, challenge.query_vectors[i].len()) }; // Créer une slice Rust à partir du pointeur C
+            assert_eq!(
+                query_slice,
+                &challenge.query_vectors[i][..],
+                "Query vectors content mismatch at index {}!",
+                i
+            );
+        }
+
+        // Compare max_distance
+        assert!(
+            (vso_challenge.max_distance - challenge.max_distance).abs() < f32::EPSILON,
+            "Max distance mismatch!"
+        );
+    }
+
     #[test]
     fn test_vector_search_with_varying_difficulties_and_seeds() {
         // Plage des valeurs de difficulté
         let num_queries_range = 80..=81;
         let baseline_range = 450..=450;
-        
+
         // Plage des seeds à utiliser
         let seed_variants: Vec<[u64; 8]> = vec![
             [323437; 8],
@@ -111,27 +201,42 @@ mod tests {
                     };
 
                     let challenge = unsafe {
-                        tig_native::vector_search::generate_instance_vs(seed.as_ptr(), &vs_difficulty as *const _)
+                        tig_native::vector_search::generate_instance_vs(
+                            seed.as_ptr(),
+                            &vs_difficulty as *const _,
+                        )
                     };
-                    
+
                     if challenge.is_null() {
                         // Gérer l'erreur si le pointeur est nul
                         panic!("Le challenge renvoyé par la fonction C++ est nul !");
                     }
-                    let rust_challenge = convert_vsochallenge_to_challenge(challenge);
+                    //let rust_challenge = convert_vsochallenge_to_challenge(challenge);
 
-                    println!("Running test for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                    let rust_challenge =
+                        tig_challenges::vector_search::Challenge::generate_instance(
+                            seed,
+                            &difficulty,
+                        )
+                        .unwrap();
 
+                    println!(
+                        "Running test for num_queries: {}, better_than_baseline: {}",
+                        num_queries, baseline
+                    );
+
+                    compare_vsochallenge_with_challenge(unsafe { &*challenge }, &rust_challenge);
+                    
                     // Appeler la méthode `solve_challenge`
                     let solution_opt = optimax_gpu::solve_challenge_native(challenge);
 
-                  
-                    let solution_outbound_opt = optimax_gpu::solve_challenge_outbound(&rust_challenge);
+                    let solution_outbound_opt =
+                        optimax_gpu::solve_challenge_outbound(&rust_challenge);
 
                     match (solution_opt, solution_outbound_opt) {
                         (Ok(Some(solution)), Ok(Some(solution_outbound))) => {
                             // Vérification que les solutions des deux méthodes sont équivalentes
-                            assert_eq!(solution, solution_outbound, "Solutions differ between solve_challenge and solve_challenge_outbound!");
+                            compare_solutions(&solution, &solution_outbound);
 
                             // Vérifier si la solution est valide
                             match rust_challenge.verify_solution(&solution) {
@@ -140,10 +245,16 @@ mod tests {
                             }
                         }
                         (Ok(None), Ok(None)) => {
-                            println!("No solution found for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                            println!(
+                                "No solution found for num_queries: {}, better_than_baseline: {}",
+                                num_queries, baseline
+                            );
                         }
                         (Err(e), _) | (_, Err(e)) => {
-                            println!("Algorithm error for num_queries: {}, better_than_baseline: {}: {}", num_queries, baseline, e);
+                            println!(
+                                "Algorithm error for num_queries: {}, better_than_baseline: {}: {}",
+                                num_queries, baseline, e
+                            );
                         }
                         _ => {
                             panic!("Mismatch in results between solve_challenge and solve_challenge_outbound for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
@@ -159,7 +270,7 @@ mod tests {
         // Plage des valeurs de difficulté
         let num_queries_range = 80..=81;
         let baseline_range = 450..=450;
-        
+
         // Plage des seeds à utiliser
         let seed_variants: Vec<[u64; 8]> = vec![
             [323437; 8],
@@ -178,14 +289,23 @@ mod tests {
                         better_than_baseline: baseline,
                     };
 
-                    println!("Running test for num_queries: {}, better_than_baseline: {}", num_queries, baseline);
+                    println!(
+                        "Running test for num_queries: {}, better_than_baseline: {}",
+                        num_queries, baseline
+                    );
                     let challenge = unsafe {
-                        tig_native::vector_search::solve_optimax_cpp_full(seed.as_ptr(), &vs_difficulty as *const _)
+                        tig_native::vector_search::solve_optimax_cpp_full(
+                            seed.as_ptr(),
+                            &vs_difficulty as *const _,
+                        )
                     };
 
                     match challenge {
                         0 => {
-                            println!("Valid solution for num_queries: {}, better_than_baseline: {}", num_queries, baseline)
+                            println!(
+                                "Valid solution for num_queries: {}, better_than_baseline: {}",
+                                num_queries, baseline
+                            )
                         }
                         1 => {
                             println!("No solution found for num_queries: {}, better_than_baseline: {} --> nb indexes missmatch the number of queries", num_queries, baseline);

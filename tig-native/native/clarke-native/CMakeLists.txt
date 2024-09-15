@@ -10,18 +10,18 @@ if (ENABLE_CUDA)
 find_package(CUDAToolkit)
 endif()
 
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 set(PROJECT_NAME clarke_gpu)
 # Shared library
-add_library(${PROJECT_NAME} STATIC
+add_library(${PROJECT_NAME} OBJECT
     clarke_wright_v1.cpp
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
-
 target_compile_options(
     ${PROJECT_NAME}
-    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native -fPIC>
-            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -mavx2 -Xcompiler -march=native>
+    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -fPIC>
+            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -Xcompiler -march=native>
 )
 
 target_compile_features(

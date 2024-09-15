@@ -10,20 +10,21 @@ if (ENABLE_CUDA)
 find_package(CUDAToolkit)
 endif()
 
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 set(PROJECT_NAME sat_gpu)
 # Shared library
-add_library(sat_gpu STATIC
+add_library(sat_gpu OBJECT
     sprint_sat.cpp
     sprint_sat_v2.cpp
 )
 
 target_compile_options(
     ${PROJECT_NAME}
-    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native -fPIC>
-            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -mavx2 -Xcompiler -march=native>
+    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -fPIC>
+            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -Xcompiler -march=native>
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
 
 target_compile_features(
     ${PROJECT_NAME}

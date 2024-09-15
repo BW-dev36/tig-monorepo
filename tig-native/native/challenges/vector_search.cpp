@@ -24,10 +24,11 @@ extern "C"
     // Génération d'une instance de VSOChallenge
     VSOChallenge *generate_instance_vs(const uint64_t * seeds, const VSODifficulty *difficulty)
     {
-        RngArray rngs(seeds);
+        RngArrayNative* rng = rng_array_native_new(seeds);
 
-        // Génération de RNGs à partir des seeds
-        std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
+        //RngArray rngs(seeds);
+        // // Génération de RNGs à partir des seeds
+        // std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
 
         // Génération de la base de données vectorielle
         float **vector_database = new float *[100000];
@@ -36,7 +37,7 @@ extern "C"
             vector_database[i] = new float[250];
             for (size_t j = 0; j < 250; ++j)
             {
-                vector_database[i][j] = uniform(rngs.get_mut());
+                vector_database[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
             }
         }
 
@@ -47,7 +48,7 @@ extern "C"
             query_vectors[i] = new float[250];
             for (size_t j = 0; j < 250; ++j)
             {
-                query_vectors[i][j] = uniform(rngs.get_mut());
+                query_vectors[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
             }
         }
 

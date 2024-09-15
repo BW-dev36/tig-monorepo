@@ -6,7 +6,7 @@
 #include <limits>
 #include <cmath>
 #include "../challenges/vector_search.h"
-
+#include <iostream>
 
 // Fonction de distance euclidienne au carré
 inline float squared_euclidean_distance(const float * a, const float * b) {
@@ -246,7 +246,7 @@ void solve_optimax_cpp(const VSOChallenge* challenge, VSOSolution* solution) {
 unsigned int solve_optimax_cpp_full(const uint64_t * seeds, const VSODifficulty *difficulty) 
 {
     auto challenge = generate_instance_vs(seeds, difficulty);
-
+    
     auto vsoSolution = new VSOSolution;
     vsoSolution->indexes = new size_t[difficulty->num_queries];
     vsoSolution->len = 0;

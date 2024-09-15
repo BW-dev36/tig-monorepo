@@ -30,12 +30,14 @@ if(BUILD_SHARED_LIBS)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libstdc++ -static-libgcc")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
 if (ENABLE_CUDA)
     find_package(CUDAToolkit)
 endif()
+
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_subdirectory(challenges)
 add_subdirectory(knapsack-native)
@@ -52,6 +54,7 @@ set_target_properties(rust_lib PROPERTIES
     IMPORTED_LOCATION ${RUST_LIB_DIR}/librust_lib.a
 )
 
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 
 # Shared library
@@ -62,10 +65,12 @@ add_library(cpp_cuda STATIC
                 $<TARGET_OBJECTS:clarke_gpu>
                 $<TARGET_OBJECTS:vector_search>)
 
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 target_compile_options(
     cpp_cuda
-    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -mavx2 -march=native>
-            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -mavx2 -Xcompiler -march=native>
+    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native>
+            $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -Xcompiler -march=native>
 )
 
 target_compile_features(
@@ -74,9 +79,6 @@ target_compile_features(
 )
 # Créez un fichier source spécifique pour forcer l'inclusion de libstdc++
 add_library(libstdcxx_object OBJECT entry.cpp)
-
-# Forcer la liaison statique des bibliothèques standard C++ et GCC
-set_target_properties(libstdcxx_object PROPERTIES COMPILE_FLAGS "-static-libstdc++ -static-libgcc")
 
 
 if (ENABLE_CUDA)
@@ -93,6 +95,7 @@ if (ENABLE_CUDA)
         PRIVATE CUDA::cudart
         PUBLIC knapsack_gpu
         PUBLIC rust_lib
+        PUBLIC challenges
     )
 
 else()
@@ -101,6 +104,7 @@ else()
         PRIVATE libstdcxx_object
         PUBLIC knapsack_gpu
         PUBLIC rust_lib
+        PUBLIC challenges
     )
 endif()
 #add_executable(main main.cpp)
