@@ -14,7 +14,6 @@
 #include <cstring>
 #include <thread>
 
-
 static std::mutex lock_check;
 //std::lock_guard<std::mutex> lock(lock_check); \
 
@@ -23,7 +22,6 @@ static std::mutex lock_check;
 
 // Global variable to track the next GPU to assign
 static std::atomic<unsigned int> next_Workspace_vs_index(0);
-
 
 extern "C"
 {
@@ -45,10 +43,11 @@ extern "C"
         {
             vector_database[i] = new float[250];
 
-            if (i < 1000) query_vectors[i] = new float[250];
+            if (i < 1000)
+                query_vectors[i] = new float[250];
         }
     }
-    
+
     Workspace_vs::~Workspace_vs()
     {
         delete solution;
@@ -56,12 +55,12 @@ extern "C"
         for (int i = 0; i < 100000; i++)
         {
             delete vector_database[i];
-            if (i < 1000) delete query_vectors[i];
+            if (i < 1000)
+                delete query_vectors[i];
         }
         delete vector_database;
         delete query_vectors;
     }
-
 
     static std::once_flag init_flag;
 
@@ -96,51 +95,101 @@ extern "C"
         return std::sqrt(sum);
     }
 
+#include <immintrin.h> // Pour AVX-512
+#include <stddef.h>    // Pour size_t
+
+    // Suppose que rng_array_native_sample_uniform32 génère un tableau de 16 floats aléatoires
+    void generate_random_floats_avx512(float *result, size_t count, RngArrayNative *rng)
+    {
+        for (size_t i = 0; i < count; i += 16)
+        {
+            // Vous devez avoir une version de rng_array_native_sample_uniform32 capable de générer 16 floats en parallèle
+            __m512 random_values = _mm512_set_ps(
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0),
+                rng_array_native_sample_uniform32(rng, 0.0, 1.0));
+            _mm512_storeu_ps(&result[i], random_values); // Stocke les 16 floats dans result[i]
+        }
+    }
+
+    // Génération de la base de données vectorielle avec AVX-512
+    void generate_vector_database_avx512(float **vector_database, size_t database_size, RngArrayNative *rng)
+    {
+        for (size_t i = 0; i < database_size; ++i)
+        {
+            generate_random_floats_avx512(vector_database[i], 250, rng); // Traite 250 floats par ligne
+        }
+    }
+
+    // Génération des vecteurs de requête avec AVX-512
+    void generate_query_vectors_avx512(float **query_vectors, size_t num_queries, RngArrayNative *rng)
+    {
+        for (size_t i = 0; i < num_queries; ++i)
+        {
+            generate_random_floats_avx512(query_vectors[i], 250, rng); // Traite 250 floats par ligne
+        }
+    }
+
     // Génération d'une instance de VSOChallenge
-    Workspace_vs * generate_instance_vs(const uint64_t *seeds, const VSODifficulty *difficulty)
+    Workspace_vs *generate_instance_vs(const uint64_t *seeds, const VSODifficulty *difficulty)
     {
         RngArrayNative *rng = rng_array_native_new(seeds);
 
         std::thread::id thread_id = std::this_thread::get_id();
         std::call_once(init_flag, initWorkspace_vs);
 
-        int workspace_id = -1; 
+        int workspace_id = -1;
         Workspace_vs *workspace_ptr = nullptr;
         while (workspace_ptr == nullptr)
         {
             int expected = 0;
             workspace_id = (next_Workspace_vs_index++) % nb_Workspace_vs;
-            
+
             if ((*workspaces_vs)[workspace_id]->in_use.compare_exchange_strong(expected, 1))
             {
                 workspace_ptr = (*workspaces_vs)[workspace_id];
                 break;
             }
         }
-    
+
         Workspace_vs &workspace = *workspace_ptr;
         workspace.solution->len = 0;
-        //std::cout << "ThreadId = " << thread_id << " ==> Choose Workspace Id = " << workspace_id << std::endl;
+        // std::cout << "ThreadId = " << thread_id << " ==> Choose Workspace Id = " << workspace_id << std::endl;
 
         // Génération de la base de données vectorielle
-        float **vector_database = workspace.vector_database;
-        for (size_t i = 0; i < 100000; ++i)
-        {
-            for (size_t j = 0; j < 250; ++j)
-            {
-                vector_database[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
-            }
-        }
+        //float **vector_database = workspace.vector_database;
+        // for (size_t i = 0; i < 100000; ++i)
+        // {
+        //     for (size_t j = 0; j < 250; ++j)
+        //     {
+        //         vector_database[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
+        //     }
+        // }
 
-        // Génération des vecteurs de requête
-        float **query_vectors = workspace.query_vectors;
-        for (size_t i = 0; i < difficulty->num_queries; ++i)
-        {
-            for (size_t j = 0; j < 250; ++j)
-            {
-                query_vectors[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
-            }
-        }
+        // // Génération des vecteurs de requête
+        // float **query_vectors = workspace.query_vectors;
+        // for (size_t i = 0; i < difficulty->num_queries; ++i)
+        // {
+        //     for (size_t j = 0; j < 250; ++j)
+        //     {
+        //         query_vectors[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
+        //     }
+        // }
+        generate_vector_database_avx512(workspace.vector_database, 100000, rng);
+        generate_query_vectors_avx512(workspace.query_vectors, difficulty->num_queries, rng);
 
         // Calcul de la distance maximale
         float max_distance = 6.0f - static_cast<float>(difficulty->better_than_baseline) / 1000.0f;
@@ -150,9 +199,9 @@ extern "C"
         std::copy(seeds, seeds + 8, ((uint64_t *)challenge->seeds));
         challenge->difficulty.better_than_baseline = difficulty->better_than_baseline;
         challenge->difficulty.num_queries = difficulty->num_queries;
-        challenge->vector_database = vector_database;
+        challenge->vector_database = workspace.vector_database;
         challenge->vector_database_size = 100000; // Taille du vector_database
-        challenge->query_vectors = query_vectors;
+        challenge->query_vectors = workspace.query_vectors;
         challenge->query_vectors_size = difficulty->num_queries;
         challenge->max_distance = max_distance;
 
@@ -190,5 +239,4 @@ extern "C"
 
         return 0; // Solution valide
     }
-
 }
