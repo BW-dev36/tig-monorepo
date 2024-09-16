@@ -90,7 +90,16 @@ async fn main() {
     let api_key = matches.get_one::<String>("API_KEY").unwrap().clone();
     let player_id = matches.get_one::<String>("PLAYER_ID").unwrap().clone();
     if let Some(master) = matches.get_one::<String>("master") {
-        slave(master, port, num_workers, selected_algorithms).await;
+        slave(
+            api_url,
+            api_key,
+            player_id,
+            master,
+            port,
+            num_workers,
+            selected_algorithms,
+        )
+        .await;
     } else {
         master(
             api_url,
@@ -106,7 +115,17 @@ async fn main() {
     }
 }
 
-async fn slave(master: &String, port: u16, num_workers: u32, selected_algorithms: String) {
+async fn slave(
+    api_url: String,
+    api_key: String,
+    player_id: String,
+    master: &String,
+    port: u16,
+    num_workers: u32,
+    selected_algorithms: String,
+) {
+    println!("[slave] setting up");
+    benchmarker::setup(api_url, api_key, player_id).await;
     println!(
         "[slave] parsing selected algorithms from: {:?}",
         selected_algorithms
@@ -165,6 +184,7 @@ async fn slave(master: &String, port: u16, num_workers: u32, selected_algorithms
         println!("[slave]: starting benchmark {:?}", job.settings);
         let nonce_iterators = job.create_nonce_iterators(num_workers);
         benchmarker::run_benchmark::execute(nonce_iterators.clone(), &job, &wasm).await;
+        let start = time();
         while time() < job.timestamps.end {
             {
                 let mut num_attempts = 0;
@@ -179,6 +199,11 @@ async fn slave(master: &String, port: u16, num_workers: u32, selected_algorithms
                 );
             }
             sleep(500).await;
+        }
+        let elapsed = time() - start;
+        if elapsed < 2500 {
+            println!("[slave]: sleeping for {}ms", 2500 - elapsed);
+            sleep(2500 - elapsed).await;
         }
 
         let mut num_attempts = 0;
