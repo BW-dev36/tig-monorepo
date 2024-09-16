@@ -23,11 +23,19 @@ if (ENABLE_CUDA)
     )
     target_compile_definitions(${PROJECT_NAME} PUBLIC __GPU__)
 
+    
     target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -fPIC>
-                $<$<COMPILE_LANGUAGE:CUDA>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -Xcompiler -march=native>
+        PRIVATE
+            # C++ options
+            $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Debug>>:-O0 -march=native -fPIC>  # Options pour le mode Debug
+            $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release>>:-O3 -march=native -fPIC>  # Options pour le mode Release
+
+            # CUDA options
+            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Debug>>:-O0 --generate-line-info -Xcompiler -fPIC -Xcompiler -march=native>  # Options pour le mode Debug
+            $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<CONFIG:Release>>:-O3 --generate-line-info -Xcompiler -fPIC -Xcompiler -march=native>  # Options pour le mode Release
     )
+
 
     target_compile_features(
         ${PROJECT_NAME}
