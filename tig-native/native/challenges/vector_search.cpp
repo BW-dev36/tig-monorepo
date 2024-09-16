@@ -119,7 +119,7 @@ extern "C"
         }
     
         Workspace_vs &workspace = *workspace_ptr;
-
+        workspace.solution->len = 0;
         //std::cout << "ThreadId = " << thread_id << " ==> Choose Workspace Id = " << workspace_id << std::endl;
 
         // Génération de la base de données vectorielle
