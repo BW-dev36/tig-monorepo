@@ -7,8 +7,83 @@
 #include <numeric>
 #include <vector>
 
+#include <stdio.h>
+#include <iostream>
+#include <mutex>
+#include <atomic>
+#include <cstring>
+#include <thread>
+
+
+static std::mutex lock_check;
+//std::lock_guard<std::mutex> lock(lock_check); \
+
+#define GENERAL_MAX_WEIGHT 10000
+#define GENERAL_MAX_NUM_ITEMS 150
+
+// Global variable to track the next GPU to assign
+static std::atomic<unsigned int> next_Workspace_vs_index(0);
+
+
 extern "C"
 {
+    Workspace_vs::Workspace_vs() : in_use(0)
+    {
+        InitDeviceAllocation();
+    }
+
+    void Workspace_vs::InitDeviceAllocation()
+    {
+        challenge = new VSOChallenge;
+        solution = new VSOSolution;
+        solution->indexes = new size_t[1000];
+        solution->len = 0;
+
+        vector_database = new float *[100000];
+        query_vectors = new float *[1000];
+        for (size_t i = 0; i < 100000; ++i)
+        {
+            vector_database[i] = new float[250];
+
+            if (i < 1000) query_vectors[i] = new float[250];
+        }
+    }
+    
+    Workspace_vs::~Workspace_vs()
+    {
+        delete solution;
+        delete challenge;
+        for (int i = 0; i < 100000; i++)
+        {
+            delete vector_database[i];
+            if (i < 1000) delete query_vectors[i];
+        }
+        delete vector_database;
+        delete query_vectors;
+    }
+
+
+    static std::once_flag init_flag;
+
+    static const int nb_Workspace_vs = 128;
+    static std::vector<Workspace_vs *> *workspaces_vs = nullptr;
+
+    static void initWorkspace_vs()
+    {
+        std::vector<Workspace_vs *> *l_Workspace_vs = new std::vector<Workspace_vs *>(nb_Workspace_vs);
+
+        std::thread::id thread_id = std::this_thread::get_id();
+        std::cout << "ThreadId = " << thread_id << " ==> Initialize Workspace_vs..." << std::endl;
+
+        for (int i = 0; i < nb_Workspace_vs; i++)
+        {
+            Workspace_vs *Workspace_vs_selected = new Workspace_vs();
+            (*l_Workspace_vs)[i] = Workspace_vs_selected;
+        }
+        std::cout << "ThreadId = " << thread_id << " ==> Initialize Workspace_vs OK" << std::endl;
+        workspaces_vs = l_Workspace_vs;
+    }
+
     // Fonction pour calculer la distance euclidienne entre deux vecteurs
     static float euclidean_distance(const float *a, const float *b)
     {
@@ -22,19 +97,35 @@ extern "C"
     }
 
     // Génération d'une instance de VSOChallenge
-    VSOChallenge *generate_instance_vs(const uint64_t * seeds, const VSODifficulty *difficulty)
+    Workspace_vs * generate_instance_vs(const uint64_t *seeds, const VSODifficulty *difficulty)
     {
-        RngArrayNative* rng = rng_array_native_new(seeds);
+        RngArrayNative *rng = rng_array_native_new(seeds);
 
-        //RngArray rngs(seeds);
-        // // Génération de RNGs à partir des seeds
-        // std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
+        std::thread::id thread_id = std::this_thread::get_id();
+        std::call_once(init_flag, initWorkspace_vs);
+
+        int workspace_id = -1; 
+        Workspace_vs *workspace_ptr = nullptr;
+        while (workspace_ptr == nullptr)
+        {
+            int expected = 0;
+            workspace_id = (next_Workspace_vs_index++) % nb_Workspace_vs;
+            
+            if ((*workspaces_vs)[workspace_id]->in_use.compare_exchange_strong(expected, 1))
+            {
+                workspace_ptr = (*workspaces_vs)[workspace_id];
+                break;
+            }
+        }
+    
+        Workspace_vs &workspace = *workspace_ptr;
+
+        //std::cout << "ThreadId = " << thread_id << " ==> Choose Workspace Id = " << workspace_id << std::endl;
 
         // Génération de la base de données vectorielle
-        float **vector_database = new float *[100000];
+        float **vector_database = workspace.vector_database;
         for (size_t i = 0; i < 100000; ++i)
         {
-            vector_database[i] = new float[250];
             for (size_t j = 0; j < 250; ++j)
             {
                 vector_database[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
@@ -42,10 +133,9 @@ extern "C"
         }
 
         // Génération des vecteurs de requête
-        float **query_vectors = new float *[difficulty->num_queries];
+        float **query_vectors = workspace.query_vectors;
         for (size_t i = 0; i < difficulty->num_queries; ++i)
         {
-            query_vectors[i] = new float[250];
             for (size_t j = 0; j < 250; ++j)
             {
                 query_vectors[i][j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0);
@@ -56,8 +146,8 @@ extern "C"
         float max_distance = 6.0f - static_cast<float>(difficulty->better_than_baseline) / 1000.0f;
 
         // Création du challenge
-        VSOChallenge *challenge = new VSOChallenge;
-        std::copy(seeds, seeds + 8, ((uint64_t*)challenge->seeds));
+        VSOChallenge *challenge = workspace.challenge;
+        std::copy(seeds, seeds + 8, ((uint64_t *)challenge->seeds));
         challenge->difficulty.better_than_baseline = difficulty->better_than_baseline;
         challenge->difficulty.num_queries = difficulty->num_queries;
         challenge->vector_database = vector_database;
@@ -66,7 +156,7 @@ extern "C"
         challenge->query_vectors_size = difficulty->num_queries;
         challenge->max_distance = max_distance;
 
-        return challenge;
+        return workspace_ptr;
     }
 
     // Vérification de la solution
@@ -101,29 +191,4 @@ extern "C"
         return 0; // Solution valide
     }
 
-    // Fonction pour libérer la mémoire allouée pour un VSOChallenge
-    void free_vso_challenge(VSOChallenge *challenge)
-    {
-        if (!challenge)
-        {
-            return;
-        }
-
-        // Libération de la mémoire pour vector_database
-        for (size_t i = 0; i < challenge->vector_database_size; ++i)
-        {
-            delete[] challenge->vector_database[i];
-        }
-        delete[] challenge->vector_database;
-
-        // Libération de la mémoire pour query_vectors
-        for (size_t i = 0; i < challenge->query_vectors_size; ++i)
-        {
-            delete[] challenge->query_vectors[i];
-        }
-        delete[] challenge->query_vectors;
-
-        // Libération de l'objet challenge lui-même
-        delete challenge;
-    }
 }

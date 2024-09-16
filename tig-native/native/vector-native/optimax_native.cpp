@@ -245,16 +245,10 @@ void solve_optimax_cpp(const VSOChallenge* challenge, VSOSolution* solution) {
 
 unsigned int solve_optimax_cpp_full(const uint64_t * seeds, const VSODifficulty *difficulty) 
 {
-    auto challenge = generate_instance_vs(seeds, difficulty);
+    auto workspace = generate_instance_vs(seeds, difficulty);
     
-    auto vsoSolution = new VSOSolution;
-    vsoSolution->indexes = new size_t[difficulty->num_queries];
-    vsoSolution->len = 0;
-
-    solve_optimax_cpp(challenge, vsoSolution);
-    int res = verify_solution_vs(challenge, vsoSolution);
-
-    free_vso_challenge(challenge);
-
+    solve_optimax_cpp(workspace->challenge, workspace->solution);
+    int res = verify_solution_vs(workspace->challenge, workspace->solution);
+    workspace->in_use = 0;
     return res;
 }

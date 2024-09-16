@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <stdint.h>
 #include <stddef.h>
+#include <atomic>
 
 extern "C"
 {
@@ -35,8 +36,28 @@ extern "C"
         size_t *indexes;
         size_t len;
     };
+
+    class Workspace_vs
+    {
+    public:
+        
+        float **vector_database;
+        float **query_vectors;
+        VSOChallenge *challenge;
+        VSOSolution *solution;
+
+        std::atomic<int> in_use;
+
+        Workspace_vs();
+
+        void InitDeviceAllocation();
+
+
+        ~Workspace_vs();
+    };
+
     // Fonctions externes
-    VSOChallenge *generate_instance_vs(const uint64_t * seeds, const VSODifficulty *difficulty);
+    Workspace_vs *generate_instance_vs(const uint64_t * seeds, const VSODifficulty *difficulty);
     unsigned int verify_solution_vs(const VSOChallenge *challenge, const VSOSolution *solution);
     void free_vso_challenge(VSOChallenge *challenge);
 
