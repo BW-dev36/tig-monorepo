@@ -245,7 +245,7 @@ void solve_optimax_cpp(const VSOChallenge* challenge, VSOSolution* solution) {
 
 unsigned int solve_optimax_cpp_full(const uint64_t * seeds, const VSODifficulty *difficulty) 
 {
-    auto workspace = generate_instance_vs(seeds, difficulty);
+    auto *workspace = generate_instance_vs(seeds, difficulty);
     
     solve_optimax_cpp(workspace->challenge, workspace->solution);
     int res = verify_solution_vs(workspace->challenge, workspace->solution);
