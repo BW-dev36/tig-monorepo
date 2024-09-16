@@ -98,12 +98,14 @@ extern "C"
 #include <immintrin.h> // Pour AVX-512
 #include <stddef.h>    // Pour size_t
 
-    // Suppose que rng_array_native_sample_uniform32 génère un tableau de 16 floats aléatoires
+    // Suppose que rng_array_native_sample_uniform32 génère un seul float aléatoire
     void generate_random_floats_avx512(float *result, size_t count, RngArrayNative *rng)
     {
-        for (size_t i = 0; i < count; i += 16)
+        size_t i = 0;
+
+        // Traite par blocs de 16 éléments
+        for (; i + 16 <= count; i += 16)
         {
-            // Vous devez avoir une version de rng_array_native_sample_uniform32 capable de générer 16 floats en parallèle
             __m512 random_values = _mm512_set_ps(
                 rng_array_native_sample_uniform32(rng, 0.0, 1.0),
                 rng_array_native_sample_uniform32(rng, 0.0, 1.0),
@@ -121,7 +123,16 @@ extern "C"
                 rng_array_native_sample_uniform32(rng, 0.0, 1.0),
                 rng_array_native_sample_uniform32(rng, 0.0, 1.0),
                 rng_array_native_sample_uniform32(rng, 0.0, 1.0));
-            _mm512_storeu_ps(&result[i], random_values); // Stocke les 16 floats dans result[i]
+            _mm512_storeu_ps(&result[i], random_values); // Stocke les 16 floats
+        }
+
+        // Gère les éléments restants (moins de 16)
+        if (i < count)
+        {
+            for (size_t j = 0; j < count - i; ++j)
+            {
+                result[i + j] = rng_array_native_sample_uniform32(rng, 0.0, 1.0); // Copie les valeurs dans le résultat final
+            }
         }
     }
 
@@ -170,7 +181,7 @@ extern "C"
         // std::cout << "ThreadId = " << thread_id << " ==> Choose Workspace Id = " << workspace_id << std::endl;
 
         // Génération de la base de données vectorielle
-        //float **vector_database = workspace.vector_database;
+        // float **vector_database = workspace.vector_database;
         // for (size_t i = 0; i < 100000; ++i)
         // {
         //     for (size_t j = 0; j < 250; ++j)
