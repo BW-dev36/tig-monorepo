@@ -1,9 +1,9 @@
 /*!
-Copyright 2024 Uncharted Trading Limited
+Copyright 2024 Just
 
-Licensed under the TIG Open Data License v1.0 or (at your option) any later version 
-(the "License"); you may not use this file except in compliance with the License. 
-You may obtain a copy of the License at
+Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); you 
+may not use this file except in compliance with the License. You may obtain a copy 
+of the License at
 
 https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
 
@@ -20,21 +20,28 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
     let c = challenge.max_capacity;
     let n = challenge.difficulty.num_nodes;
 
+    let max_dist: f32 = challenge.distance_matrix[0].iter().sum::<i32>() as f32;
+    let p = challenge.max_total_distance as f32 / max_dist;
+    if p < 0.57 {
+        return Ok(None)
+    }
+
     // Clarke-Wright heuristic for node pairs based on their distances to depot
     // vs distance between each other
-    let mut scores: Vec<(i32, usize, usize)> = Vec::new();
+    let mut scores: Vec<(i32, usize, usize)> = Vec::with_capacity((n-1)*(n-2)/2);
     for i in 1..n {
         for j in (i + 1)..n {
             scores.push((d[i][0] + d[0][j] - d[i][j], i, j));
         }
     }
-    scores.sort_by(|a, b| b.0.cmp(&a.0)); // Sort in descending order by score
 
+    scores.sort_unstable_by(|a, b| b.0.cmp(&a.0));    
+    
     // Create a route for every node
     let mut routes: Vec<Option<Vec<usize>>> = (0..n).map(|i| Some(vec![i])).collect();
     routes[0] = None;
     let mut route_demands: Vec<i32> = challenge.demands.clone();
-
+   
     // Iterate through node pairs, starting from greatest score
     for (s, i, j) in scores {
         // Stop if score is negative
@@ -85,19 +92,21 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         route_demands[left_startnode] = merged_demand;
         route_demands[right_endnode] = merged_demand;
     }
+    
+    let routes = routes
+    .into_iter()
+    .enumerate()
+    .filter(|(i, x)| x.as_ref().is_some_and(|x| x[0] == *i))
+    .map(|(_, mut x)| {
+        let mut route = vec![0];
+        route.append(x.as_mut().unwrap());
+        route.push(0);
+        route
+    })
+    .collect();
 
     Ok(Some(Solution {
-        routes: routes
-            .into_iter()
-            .enumerate()
-            .filter(|(i, x)| x.as_ref().is_some_and(|x| x[0] == *i))
-            .map(|(_, mut x)| {
-                let mut route = vec![0];
-                route.append(x.as_mut().unwrap());
-                route.push(0);
-                route
-            })
-            .collect(),
+        routes
     }))
 }
 

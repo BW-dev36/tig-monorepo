@@ -51,7 +51,7 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
             &mut minimum_cost,
             (solution, total_cost),
         );
-        perturbation_limit += if run % 2 == 0 {
+        perturbation_limit += if run % 3 == 0 {
             if new_solution {
                 1
             } else {

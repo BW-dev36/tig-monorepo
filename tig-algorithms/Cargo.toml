@@ -14,6 +14,8 @@ cudarc = { version = "0.12.0", features = [
 ndarray = "0.15.6"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 tig-challenges = { path = "../tig-challenges" }
+rayon = "1.5"
+
 
 [lib]
 crate-type = ["cdylib", "rlib"]

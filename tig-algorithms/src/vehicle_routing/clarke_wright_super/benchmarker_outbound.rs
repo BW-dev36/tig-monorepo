@@ -1,8 +1,8 @@
 /*!
-Copyright 2024 Uncharted Trading Limited
+Copyright 2024 OvErLoDe
 
-Licensed under the TIG Commercial License v1.0 (the "License"); you 
-may not use this file except in compliance with the License. You may obtain a copy 
+Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); you
+may not use this file except in compliance with the License. You may obtain a copy
 of the License at
 
 https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
@@ -22,13 +22,15 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
 
     // Clarke-Wright heuristic for node pairs based on their distances to depot
     // vs distance between each other
-    let mut scores: Vec<(i32, usize, usize)> = Vec::new();
+    let mut scores: Vec<(i32, usize, usize)> = Vec::with_capacity((n * (n - 1)) / 2);
     for i in 1..n {
+        let d_i0 = d[i][0]; // Cache this value to avoid repeated lookups
         for j in (i + 1)..n {
-            scores.push((d[i][0] + d[0][j] - d[i][j], i, j));
+            let score = d_i0 + d[0][j] - d[i][j];
+            scores.push((score, i, j));
         }
     }
-    scores.sort_by(|a, b| b.0.cmp(&a.0)); // Sort in descending order by score
+    scores.sort_unstable_by(|a, b| b.0.cmp(&a.0)); // Sort in descending order by score
 
     // Create a route for every node
     let mut routes: Vec<Option<Vec<usize>>> = (0..n).map(|i| Some(vec![i])).collect();
@@ -47,18 +49,20 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
             continue;
         }
 
-        let left_route = routes[i].as_ref().unwrap();
-        let right_route = routes[j].as_ref().unwrap();
-        let mut left_startnode = left_route[0];
-        let right_startnode = right_route[0];
-        let left_endnode = left_route[left_route.len() - 1];
-        let mut right_endnode = right_route[right_route.len() - 1];
+        // Directly get the routes
+        let (left_route, right_route) = (routes[i].as_ref().unwrap(), routes[j].as_ref().unwrap());
+
+        // Cache indices and demands
+        let (left_startnode, left_endnode) = (left_route[0], *left_route.last().unwrap());
+        let (right_startnode, right_endnode) = (right_route[0], *right_route.last().unwrap());
         let merged_demand = route_demands[left_startnode] + route_demands[right_startnode];
 
+        // Check constraints
         if left_startnode == right_startnode || merged_demand > c {
             continue;
         }
 
+        // Merge routes
         let mut left_route = routes[i].take().unwrap();
         let mut right_route = routes[j].take().unwrap();
         routes[left_startnode] = None;
@@ -66,41 +70,44 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         routes[left_endnode] = None;
         routes[right_endnode] = None;
 
-        // reverse it
+        // Reverse if needed
         if left_startnode == i {
             left_route.reverse();
-            left_startnode = left_endnode;
         }
         if right_endnode == j {
             right_route.reverse();
-            right_endnode = right_startnode;
         }
 
+        // Create new route
         let mut new_route = left_route;
         new_route.extend(right_route);
 
-        // Only the start and end nodes of routes are kept
-        routes[left_startnode] = Some(new_route.clone());
-        routes[right_endnode] = Some(new_route);
-        route_demands[left_startnode] = merged_demand;
-        route_demands[right_endnode] = merged_demand;
+        // Update routes and demands
+        let (start, end) = (*new_route.first().unwrap(), *new_route.last().unwrap());
+        routes[start] = Some(new_route.clone());
+        routes[end] = Some(new_route);
+        route_demands[start] = merged_demand;
+        route_demands[end] = merged_demand;
+    }
+
+    let mut final_routes = Vec::new();
+
+    for (i, opt_route) in routes.into_iter().enumerate() {
+        if let Some(mut route) = opt_route {
+            if route[0] == i {
+                let mut full_route = Vec::with_capacity(route.len() + 2);
+                full_route.push(0);
+                full_route.append(&mut route);
+                full_route.push(0);
+                final_routes.push(full_route);
+            }
+        }
     }
 
     Ok(Some(Solution {
-        routes: routes
-            .into_iter()
-            .enumerate()
-            .filter(|(i, x)| x.as_ref().is_some_and(|x| x[0] == *i))
-            .map(|(_, mut x)| {
-                let mut route = vec![0];
-                route.append(x.as_mut().unwrap());
-                route.push(0);
-                route
-            })
-            .collect(),
+        routes: final_routes,
     }))
 }
-
 #[cfg(feature = "cuda")]
 mod gpu_optimisation {
     use super::*;
