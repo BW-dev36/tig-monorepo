@@ -79,16 +79,26 @@ pub fn compute_solution(
     let challenge_len = serialized_challenge.len() as u32;
     let challenge_ptr: u32 = init.call(&mut store, challenge_len).unwrap();
     memory
-        .write(&mut store, challenge_ptr as usize, &serialized_challenge)
-        .expect("Failed to write serialized challenge to `memory`");
-    let solution_ptr = entry_point
-        .call(&mut store, (challenge_ptr, challenge_len))
-        .map_err(|e| anyhow!("Failed to call function: {:?}", e))?;
+    .write(&mut store, challenge_ptr as usize, &serialized_challenge)
+    .expect("Failed to write serialized challenge to `memory`");
+
+    let result = entry_point.call(&mut store, (challenge_ptr, challenge_len));
+
+    let fuel_consumed = max_fuel - store.get_fuel().unwrap();
+
+    let solution_ptr = result.map_err(|e| {
+        anyhow!(
+            "Failed to call function: {:?}. Fuel consumed: {}",
+            e,
+            fuel_consumed
+        )
+    })?;
+
 
     // Get runtime signature
     let runtime_signature_u64 = store.get_runtime_signature();
     let runtime_signature = (runtime_signature_u64 as u32) ^ ((runtime_signature_u64 >> 32) as u32);
-    let fuel_consumed = max_fuel - store.get_fuel().unwrap();
+    //let fuel_consumed = max_fuel - store.get_fuel().unwrap();
     // Read solution from memory
     let mut solution_len_bytes = [0u8; 4];
     memory

@@ -1,9 +1,9 @@
 /*!
 Copyright 2024 bw-dev36
 
-Licensed under the TIG Benchmarker Outbound Game License v1.0 (the "License"); you 
-may not use this file except in compliance with the License. You may obtain a copy 
-of the License at
+Licensed under the TIG Inbound Game License v1.0 or (at your option) any later
+version (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
 
 https://github.com/tig-foundation/tig-monorepo/tree/main/docs/licenses
 
@@ -14,9 +14,9 @@ language governing permissions and limitations under the License.
 */
 
 use anyhow::Ok;
-use tig_challenges::vector_search::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use tig_challenges::vector_search::*;
 
 struct KDNode<'a> {
     point: &'a [f32],
@@ -114,84 +114,42 @@ fn build_kd_tree<'a>(points: &mut [(&'a [f32], usize)]) -> Option<Box<KDNode<'a>
     root
 }
 
-#[inline(always)]
-fn squared_euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-    let mut sum = 0.0;
-    for i in 0..a.len() {
-        let diff = a[i] - b[i];
-        sum += diff * diff;
-    }
-    sum
-}
 
 #[inline(always)]
 fn early_stopping_distance(a: &[f32], b: &[f32], current_min: f32) -> f32 {
     let mut sum = 0.0;
     let mut i = 0;
-    while i + 3 < a.len() {
+    let dimensions_to_check = 248; 
+
+    while i + 7 < dimensions_to_check {
         let diff0 = a[i] - b[i];
         let diff1 = a[i + 1] - b[i + 1];
         let diff2 = a[i + 2] - b[i + 2];
         let diff3 = a[i + 3] - b[i + 3];
+        let diff4 = a[i + 4] - b[i + 4];
+        let diff5 = a[i + 5] - b[i + 5];
+        let diff6 = a[i + 6] - b[i + 6];
+        let diff7 = a[i + 7] - b[i + 7];
 
-        sum += diff0 * diff0 + diff1 * diff1 + diff2 * diff2 + diff3 * diff3;
+        sum += diff0 * diff0
+            + diff1 * diff1
+            + diff2 * diff2
+            + diff3 * diff3
+            + diff4 * diff4
+            + diff5 * diff5
+            + diff6 * diff6
+            + diff7 * diff7;
 
         if sum > current_min {
-            return f32::MAX;
+            return f32::MAX; 
         }
 
-        i += 4;
-    }
-
-    while i < a.len() {
-        let diff = a[i] - b[i];
-        sum += diff * diff;
-
-        if sum > current_min {
-            return f32::MAX;
-        }
-
-        i += 1;
+        i += 8;
     }
 
     sum
 }
 
-fn nearest_neighbor_search<'a>(
-    root: &Option<Box<KDNode<'a>>>,
-    target: &[f32],
-    best: &mut (f32, Option<usize>),
-) {
-    let num_dimensions = target.len();
-    let mut stack = Vec::with_capacity(64);
-
-    if let Some(node) = root {
-        stack.push((node.as_ref(), 0));
-    }
-
-    while let Some((node, depth)) = stack.pop() {
-        let axis = depth % num_dimensions;
-        let dist = early_stopping_distance(&node.point, target, best.0);
-
-        if dist < best.0 {
-            best.0 = dist;
-            best.1 = Some(node.index);
-        }
-
-        let diff = target[axis] - node.point[axis];
-        let sqr_diff = diff * diff;
-
-        if sqr_diff < best.0 {
-            if let Some(farther_node) = if diff < 0.0 { &node.right } else { &node.left } {
-                stack.push((farther_node.as_ref(), depth + 1));
-            }
-        }
-
-        if let Some(nearer_node) = if diff < 0.0 { &node.left } else { &node.right } {
-            stack.push((nearer_node.as_ref(), depth + 1));
-        }
-    }
-}
 
 fn calculate_mean_vector(vectors: &[&[f32]]) -> Vec<f32> {
     let num_vectors = vectors.len();
@@ -231,23 +189,60 @@ impl PartialOrd for FloatOrd {
 
 impl Ord for FloatOrd {
     fn cmp(&self, other: &Self) -> Ordering {
-
         self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }
+}
+
+#[inline(always)]
+fn weighted_squared_euclidean_distance(a: &[f32], b: &[f32], weights: &[f32]) -> f32 {
+    let mut sum = 0.0;
+    for i in 0..a.len() {
+        let diff = a[i] - b[i];
+        sum += weights[i] * diff * diff;
+    }
+    sum
+}
+
+#[inline(always)]
+fn calculate_mean_and_variance(vectors: &[&[f32]]) -> (Vec<f32>, Vec<f32>) {
+    let num_vectors = vectors.len();
+    let num_dimensions = 250;
+
+    let mut mean_vector = vec![0.0; num_dimensions];
+    let mut sum_squares = vec![0.0; num_dimensions];
+
+    for vector in vectors {
+        for i in 0..num_dimensions {
+            mean_vector[i] += vector[i];
+            sum_squares[i] += vector[i] * vector[i];
+        }
+    }
+
+    let mut variances = vec![0.0; num_dimensions];
+    for i in 0..num_dimensions {
+        mean_vector[i] /= num_vectors as f32;
+        let mean_square = sum_squares[i] / num_vectors as f32;
+        let square_mean = mean_vector[i] * mean_vector[i];
+        variances[i] = mean_square - square_mean;
+    }
+
+    (mean_vector, variances)
 }
 
 fn filter_relevant_vectors<'a>(
     database: &'a [Vec<f32>],
     query_vectors: &[Vec<f32>],
     k: usize,
-) -> Vec<(&'a [f32], usize)> {
+    convergence_threshold: f32,
+) -> Option<Vec<(&'a [f32], usize)>> {
     let query_refs: Vec<&[f32]> = query_vectors.iter().map(|v| &v[..]).collect();
-    let mean_query_vector = calculate_mean_vector(&query_refs);
+    let (mean_query_vector, variances) = calculate_mean_and_variance(&query_refs);
 
     let mut heap: BinaryHeap<(FloatOrd, usize)> = BinaryHeap::with_capacity(k);
 
     for (index, vector) in database.iter().enumerate() {
-        let dist = squared_euclidean_distance(&mean_query_vector, vector);
+        let dist = weighted_squared_euclidean_distance(&mean_query_vector, vector, &variances);
+
         let ord_dist = FloatOrd(dist);
         if heap.len() < k {
             heap.push((ord_dist, index));
@@ -255,60 +250,109 @@ fn filter_relevant_vectors<'a>(
             if dist < top_dist {
                 heap.pop();
                 heap.push((ord_dist, index));
+
+
+                if (top_dist - dist).abs() < convergence_threshold {
+                    return None;
+                }
             }
         }
     }
+
     let result: Vec<(&'a [f32], usize)> = heap
         .into_iter()
         .map(|(_, index)| (&database[index][..], index))
         .collect();
 
-    result
+    Some(result)
 }
 
-pub fn solve_challenge_old(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
+
+fn nearest_neighbor_search<'a>(
+    root: &Option<Box<KDNode<'a>>>,
+    target: &[f32],
+    best: &mut (f32, Option<usize>),
+    max_depth: usize,
+) {
+    let num_dimensions = 250;
+    let mut stack = Vec::with_capacity(64);
+
+    if let Some(node) = root {
+        stack.push((node.as_ref(), 0));
+    }
+
+    while let Some((node, depth)) = stack.pop() {
+        let axis = depth % num_dimensions;
+        let dist = early_stopping_distance(&node.point, target, best.0);
+
+        if dist < best.0 {
+            best.0 = dist;
+            best.1 = Some(node.index);
+        }
+
+        let diff = target[axis] - node.point[axis];
+        let sqr_diff = diff * diff;
+
+        if sqr_diff < best.0 {
+            if let Some(farther_node) = if diff < 0.0 { &node.right } else { &node.left } {
+                stack.push((farther_node.as_ref(), depth + 1));
+            }
+        }
+
+        if let Some(nearer_node) = if diff < 0.0 { &node.left } else { &node.right } {
+            stack.push((nearer_node.as_ref(), depth + 1));
+        }
+    }
+}
+
+
+pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let query_count = challenge.query_vectors.len();
 
     let subset_size = match query_count {
         10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
-        10..=19 if challenge.difficulty.better_than_baseline > 470 => 4200,
-        20..=28 if challenge.difficulty.better_than_baseline <= 465 => 3000,
-        20..=28 if challenge.difficulty.better_than_baseline > 465 => 6000, // need more fuel
-        29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
-        29..=45 if challenge.difficulty.better_than_baseline > 480 => 6000,
-        46..=50 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
-        51..=70 if challenge.difficulty.better_than_baseline <= 480 => 3000,
-        51..=70 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
-        71..=100 if challenge.difficulty.better_than_baseline <= 480 => 1500,
-        71..=100 if challenge.difficulty.better_than_baseline > 480 => 2500, // need more fuel
-        _ => 1000,                                                             // need more fuel
+        100..=117 => 5000,
+        118..=146 => 4000, 
+        147..=190 => 3000, 
+        191..=280 => 2000, 
+        281..=380 => 1500, 
+        _ => 1000, 
     };
+
+    
+    let distance_threshold = 0.000001; 
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
         subset_size,
+        distance_threshold, 
     );
 
+    
+    if subset.is_none() {
+        return Ok(Some(Solution {
+            indexes: vec![], 
+        }));
+    }
 
-    let kd_tree = build_kd_tree(&mut subset.clone());
-
+    let kd_tree = build_kd_tree(&mut subset.unwrap().clone());
 
     let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
 
     for query in challenge.query_vectors.iter() {
         let mut best = (std::f32::MAX, None);
-        nearest_neighbor_search(&kd_tree, query, &mut best);
+        nearest_neighbor_search(&kd_tree, query, &mut best, 64);
 
         if let Some(best_index) = best.1 {
             best_indexes.push(best_index);
         }
     }
 
-
     Ok(Some(Solution {
         indexes: best_indexes,
     }))
 }
+
 
 #[cfg(feature = "cuda")]
 mod gpu_optimisation {
@@ -345,18 +389,14 @@ mod gpu_optimisation {
 
         let subset_size = match query_count {
             10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
-            10..=19 if challenge.difficulty.better_than_baseline > 470 => 4200,
-            20..=28 if challenge.difficulty.better_than_baseline <= 465 => 3000,
-            20..=28 if challenge.difficulty.better_than_baseline > 465 => 6000, // need more fuel
-            29..=50 if challenge.difficulty.better_than_baseline <= 480 => 2000,
-            29..=45 if challenge.difficulty.better_than_baseline > 480 => 6000,
-            46..=50 if challenge.difficulty.better_than_baseline > 480 => 5000, // need more fuel
-            51..=70 if challenge.difficulty.better_than_baseline <= 480 => 3000,
-            51..=70 if challenge.difficulty.better_than_baseline > 480 => 3000, // need more fuel
-            71..=100 if challenge.difficulty.better_than_baseline <= 480 => 1500,
-            71..=100 if challenge.difficulty.better_than_baseline > 480 => 2500, // need more fuel
-            _ => 1000,                                                             // need more fuel
+            100..=117 => 5000,
+            118..=146 => 4000, 
+            147..=190 => 3000, 
+            191..=280 => 2000, 
+            281..=380 => 1500, 
+            _ => 1000, 
         };
+    
         let subset = cuda_filter_relevant_vectors(
             &challenge.vector_database,
             &challenge.query_vectors,
@@ -365,7 +405,6 @@ mod gpu_optimisation {
             funcs,
         )?;
         let kd_tree = build_kd_tree(&mut subset.clone());
-
 
         let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
 
@@ -377,10 +416,6 @@ mod gpu_optimisation {
                 best_indexes.push(best_index);
             }
         }
-        
-
-
-
 
         Ok(Some(Solution {
             indexes: best_indexes,
@@ -395,7 +430,6 @@ mod gpu_optimisation {
         dev: &Arc<CudaDevice>,
         mut funcs: HashMap<&'static str, CudaFunction>,
     ) -> anyhow::Result<Vec<(&'a [f32], usize)>> {
-       
         let query_refs: Vec<&[f32]> = query_vectors.iter().map(|v| &v[..]).collect();
         let mean_query_vector = calculate_mean_vector(&query_refs);
 
@@ -446,7 +480,8 @@ mod gpu_optimisation {
     }
 
     #[cfg(feature = "cuda")]
-    fn cuda_build_kd_tree<'a>(subset: &mut [(&'a [f32], usize)],
+    fn cuda_build_kd_tree<'a>(
+        subset: &mut [(&'a [f32], usize)],
         dev: &Arc<CudaDevice>,
         funcs: &mut HashMap<&'static str, CudaFunction>,
     ) -> Option<Box<KDNode<'a>>> {

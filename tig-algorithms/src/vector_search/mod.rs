@@ -1,44 +1,91 @@
-pub mod optimax_search;
-
+pub mod optimax_gpu;
+pub use optimax_gpu as c004_a026;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use std::time::Instant;
     use tig_challenges::{vector_search::*, *};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    
+    pub fn time() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    fn random_difficulty() -> Difficulty {
+        let mut rng = StdRng::seed_from_u64(time() as u64);
+        let num_queries = rng.gen_range(100..=500); // Générer un nombre aléatoire de requêtes
+        let better_than_baseline = rng.gen_range(490..=580); // Générer une distance baseline aléatoire
+
+        Difficulty {
+            num_queries,
+            better_than_baseline,
+        }
+    }
+
+    fn random_seed() -> [u64; 8] {
+        let mut rng = StdRng::seed_from_u64(time() as u64);
+        let mut seed = [0u64; 8];
+        for i in 0..8 {
+            seed[i] = rng.gen_range(1..=1_000_000); // Générer des seeds aléatoires
+        }
+        seed
+    }
 
     #[test]
-    fn test_vector_search() {
-        let difficulty = Difficulty {
-            // Uncomment the relevant fields.
-            // Modify the values for different difficulties
+    fn test_compare_solve_challenges() {
+        // Générer une difficulté aléatoire et une seed aléatoire
+        let mut i = 0;
 
-            // -- satisfiability --
-            // num_variables: 50,
-            // clauses_to_variables_percent: 300,
+        while i < 1000 {
+            let difficulty = random_difficulty();
+            let seed = random_seed();
+            let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
 
-            // -- vehicle_routing --
-            // num_nodes: 40,
-            // better_than_baseline: 250,
+            println!(
+                "Running test with difficulty: num_queries = {}, better_than_baseline = {}",
+                difficulty.num_queries, difficulty.better_than_baseline
+            );
 
-            // -- knapsack --
-            // num_items: 50,
-            // better_than_baseline: 10,
+            // // Test de l'algorithme solve_challenge (actuel)
+            let start_time = Instant::now();
+            // let result_current = optimax_gpu::solve_challenge_old(&challenge);
+            //let duration_current = start_time.elapsed();
 
-            //-- vector_search --
-            num_queries: 20,
-            better_than_baseline: 510,
-        };
-        let seed: [u64; 8] = [323437; 8]; // change this to generate different instances
-        let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
-        println!("Running test ...");
-        match optimax_search::solve_challenge(&challenge) {
-            Ok(Some(solution)) => match challenge.verify_solution(&solution) {
-                Ok(_) => println!("Valid solution"),
-                Err(e) => println!("Invalid solution: {}", e),
-            },
-            Ok(None) => println!("No solution"),
-            Err(e) => println!("Algorithm error: {}", e),
-        };
+            // match result_current {
+            //     Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+            //         Ok(_) => println!("Valid solution (solve_challenge) ... ok"),
+            //         Err(e) => println!("Invalid solution (solve_challenge): {}", e),
+            //     },
+            //     Ok(None) => println!("No solution (solve_challenge)"),
+            //     Err(e) => println!("Algorithm error (solve_challenge): {}", e),
+            // };
+
+            // Test de l'algorithme solve_challenge_test (nouveau)
+            let start_time_test = Instant::now();
+            let result_test = optimax_gpu::solve_challenge(&challenge);
+            let duration_test = start_time_test.elapsed();
+
+            match result_test {
+                Ok(Some(solution)) => match challenge.verify_solution(&solution) {
+                    Ok(_) => println!("Valid solution (solve_challenge_test) ... ok"),
+                    Err(e) => println!("KO Invalid solution (solve_challenge_test): {}", e),
+                },
+                Ok(None) => println!("No solution (solve_challenge_test)"),
+                Err(e) => println!("Algorithm error (solve_challenge_test): {}", e),
+            };
+
+            // Afficher les résultats de la comparaison de performance
+            println!("Performance comparison:");
+            // println!("solve_challenge (current) duration: {:?}", duration_current);
+            println!("solve_challenge_test (new) duration: {:?}", duration_test);
+            i += 1;
+        }
     }
 }
 
@@ -178,9 +225,6 @@ pub use fast_search as c004_a016;
 // c004_a024
 
 // c004_a025
-
-pub mod optimax_gpu;
-pub use optimax_gpu as c004_a026;
 
 // c004_a027
 
