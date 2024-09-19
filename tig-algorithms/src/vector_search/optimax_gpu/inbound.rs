@@ -114,12 +114,11 @@ fn build_kd_tree<'a>(points: &mut [(&'a [f32], usize)]) -> Option<Box<KDNode<'a>
     root
 }
 
-
 #[inline(always)]
 fn early_stopping_distance(a: &[f32], b: &[f32], current_min: f32) -> f32 {
     let mut sum = 0.0;
     let mut i = 0;
-    let dimensions_to_check = 248; 
+    let dimensions_to_check = 248;
 
     while i + 7 < dimensions_to_check {
         let diff0 = a[i] - b[i];
@@ -141,33 +140,13 @@ fn early_stopping_distance(a: &[f32], b: &[f32], current_min: f32) -> f32 {
             + diff7 * diff7;
 
         if sum > current_min {
-            return f32::MAX; 
+            return f32::MAX;
         }
 
         i += 8;
     }
 
     sum
-}
-
-
-fn calculate_mean_vector(vectors: &[&[f32]]) -> Vec<f32> {
-    let num_vectors = vectors.len();
-    let num_dimensions = 250;
-
-    let mut mean_vector = vec![0.0; num_dimensions];
-
-    for vector in vectors {
-        for i in 0..num_dimensions {
-            mean_vector[i] += vector[i];
-        }
-    }
-
-    for i in 0..num_dimensions {
-        mean_vector[i] /= num_vectors as f32;
-    }
-
-    mean_vector
 }
 
 #[derive(Debug)]
@@ -251,7 +230,6 @@ fn filter_relevant_vectors<'a>(
                 heap.pop();
                 heap.push((ord_dist, index));
 
-
                 if (top_dist - dist).abs() < convergence_threshold {
                     return None;
                 }
@@ -267,12 +245,10 @@ fn filter_relevant_vectors<'a>(
     Some(result)
 }
 
-
 fn nearest_neighbor_search<'a>(
     root: &Option<Box<KDNode<'a>>>,
     target: &[f32],
-    best: &mut (f32, Option<usize>),
-    max_depth: usize,
+    best: &mut (f32, Option<usize>)
 ) {
     let num_dimensions = 250;
     let mut stack = Vec::with_capacity(64);
@@ -305,34 +281,29 @@ fn nearest_neighbor_search<'a>(
     }
 }
 
-
 pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>> {
     let query_count = challenge.query_vectors.len();
 
     let subset_size = match query_count {
         10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
-        100..=117 => 5000,
-        118..=146 => 4000, 
-        147..=190 => 3000, 
-        191..=280 => 2000, 
-        281..=380 => 1500, 
-        _ => 1000, 
+        100..=117 => 4500,
+        118..=146 => 4000,
+        147..=190 => 3000,
+        191..=280 => 2000,
+        281..=380 => 1500,
+        _ => 1000,
     };
 
-    
-    let distance_threshold = 0.000001; 
+    let distance_threshold = 0.000001;
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
         subset_size,
-        distance_threshold, 
+        distance_threshold,
     );
 
-    
     if subset.is_none() {
-        return Ok(Some(Solution {
-            indexes: vec![], 
-        }));
+        return Ok(Some(Solution { indexes: vec![] }));
     }
 
     let kd_tree = build_kd_tree(&mut subset.unwrap().clone());
@@ -341,7 +312,7 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
 
     for query in challenge.query_vectors.iter() {
         let mut best = (std::f32::MAX, None);
-        nearest_neighbor_search(&kd_tree, query, &mut best, 64);
+        nearest_neighbor_search(&kd_tree, query, &mut best);
 
         if let Some(best_index) = best.1 {
             best_indexes.push(best_index);
@@ -353,7 +324,6 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
     }))
 }
 
-
 #[cfg(feature = "cuda")]
 mod gpu_optimisation {
     use super::*;
@@ -363,13 +333,63 @@ mod gpu_optimisation {
     pub const KERNEL: Option<CudaKernel> = Some(CudaKernel {
         src: r#"
         
-        #include <thrust/sort.h>
-        #include <thrust/device_ptr.h>
+        extern "C" __global__ void merge(float* distances, int* indices, float* temp_distances, int* temp_indices, int left, int mid, int right) {
+            int i = left;
+            int j = mid + 1;
+            int k = left;
 
-        extern "C" void sort_distances(float* distances, int* indices, int num_vectors) {
-            thrust::device_ptr<float> dist_ptr(distances);
-            thrust::device_ptr<int> index_ptr(indices);
-            thrust::sort_by_key(dist_ptr, dist_ptr + num_vectors, index_ptr);
+            while (i <= mid && j <= right) {
+                if (distances[i] <= distances[j]) {
+                    temp_distances[k] = distances[i];
+                    temp_indices[k] = indices[i];
+                    i++;
+                } else {
+                    temp_distances[k] = distances[j];
+                    temp_indices[k] = indices[j];
+                    j++;
+                }
+                k++;
+            }
+
+            while (i <= mid) {
+                temp_distances[k] = distances[i];
+                temp_indices[k] = indices[i];
+                i++;
+                k++;
+            }
+
+            while (j <= right) {
+                temp_distances[k] = distances[j];
+                temp_indices[k] = indices[j];
+                j++;
+                k++;
+            }
+
+            for (i = left; i <= right; i++) {
+                distances[i] = temp_distances[i];
+                indices[i] = temp_indices[i];
+            }
+        }
+
+        extern "C" __global__ void merge_sort_parallel(float* distances, int* indices, float* temp_distances, int* temp_indices, int num_vectors) {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+            int curr_size = 1;
+
+            while (curr_size < num_vectors) {
+                int left = idx * (curr_size * 2);
+
+                if (left < num_vectors) {
+                    int mid = min(left + curr_size - 1, num_vectors - 1);
+                    int right = min(left + 2 * curr_size - 1, num_vectors - 1);
+
+                    merge(distances, indices, temp_distances, temp_indices, left, mid, right);
+                }
+
+                curr_size *= 2;
+
+                __syncthreads();
+            }
         }
 
 
@@ -415,9 +435,15 @@ mod gpu_optimisation {
         
         "#,
 
-        funcs: &["filter_vectors"],
+        funcs: &[
+            "calculate_distances",
+            "calculate_mean_and_variance",
+            "merge_sort_parallel",
+            "merge",
+        ],
     });
 
+    #[cfg(feature = "cuda")]
     pub fn cuda_solve_challenge(
         challenge: &Challenge,
         dev: &Arc<CudaDevice>,
@@ -428,21 +454,30 @@ mod gpu_optimisation {
         let subset_size = match query_count {
             10..=19 if challenge.difficulty.better_than_baseline <= 470 => 4200,
             100..=117 => 5000,
-            118..=146 => 4000, 
-            147..=190 => 3000, 
-            191..=280 => 2000, 
-            281..=380 => 1500, 
-            _ => 1000, 
+            118..=146 => 4000,
+            147..=190 => 3000,
+            191..=280 => 2000,
+            281..=380 => 1500,
+            _ => 1000,
         };
-    
+
+        //GPU calls with so many memory transfer are sub optimal comapred to CPU, It's stupid to call cuda for now
+        // Need a better solution to manage memory...
+
         let subset = cuda_filter_relevant_vectors(
             &challenge.vector_database,
             &challenge.query_vectors,
             subset_size,
+            0.000001,
             dev,
             funcs,
         )?;
-        let kd_tree = build_kd_tree(&mut subset.clone());
+
+        if subset.is_none() {
+            return Ok(Some(Solution { indexes: vec![] }));
+        }
+
+        let kd_tree = build_kd_tree(&mut subset.unwrap().clone());
 
         let mut best_indexes = Vec::with_capacity(challenge.query_vectors.len());
 
@@ -460,32 +495,28 @@ mod gpu_optimisation {
         }))
     }
 
+    #[cfg(feature = "cuda")]
     fn cuda_calculate_mean_and_variance(
-        query_refs: &[&[f32]],
+        query_refs: &[Vec<f32>],
         dev: &Arc<CudaDevice>,
-        mut funcs: HashMap<&'static str, CudaFunction>,
-    ) -> anyhow::Result<(Vec<f32>, Vec<f32>)> {
+        funcs: &mut HashMap<&'static str, CudaFunction>,
+    ) -> anyhow::Result<(CudaSlice<f32>, CudaSlice<f32>)> {
         let num_vectors = query_refs.len();
         let num_dimensions = 250;
-    
-        // Aplatir les requêtes pour les envoyer sur le GPU
+
         let flattened_queries: Vec<f32> = query_refs.iter().flatten().cloned().collect();
-    
-        // Copier les vecteurs aplatis vers le GPU
+
         let queries_dev = dev.htod_sync_copy(&flattened_queries)?;
-    
-        // Allouer des buffers pour le vecteur moyen et les variances sur le GPU
-        let mut mean_dev = dev.alloc_zeros::<f32>(num_dimensions)?;
-        let mut variances_dev = dev.alloc_zeros::<f32>(num_dimensions)?;
-    
-        // Configuration du lancement du kernel
+
+        let mut mean_dev: CudaSlice<f32> = dev.alloc_zeros::<f32>(num_dimensions)?;
+        let mut variances_dev: CudaSlice<f32> = dev.alloc_zeros::<f32>(num_dimensions)?;
+
         let cfg = LaunchConfig {
             block_dim: (256, 1, 1),
             grid_dim: ((num_dimensions as u32 + 255) / 256, 1, 1),
             shared_mem_bytes: 0,
         };
-    
-        // Lancer le kernel pour calculer le vecteur moyen et les variances
+
         unsafe {
             funcs.remove("calculate_mean_and_variance").unwrap().launch(
                 cfg,
@@ -498,16 +529,9 @@ mod gpu_optimisation {
                 ),
             )
         }?;
-    
-        // Récupérer les résultats depuis le GPU vers le CPU
-        let mut mean_host = vec![0.0f32; num_dimensions];
-        let mut variances_host = vec![0.0f32; num_dimensions];
-        dev.dtoh_sync_copy_into(&mean_dev, &mut mean_host)?;
-        dev.dtoh_sync_copy_into(&variances_dev, &mut variances_host)?;
-    
-        Ok((mean_host, variances_host))
+
+        Ok((mean_dev, variances_dev))
     }
-    
 
     #[cfg(feature = "cuda")]
     fn cuda_filter_relevant_vectors<'a>(
@@ -518,23 +542,22 @@ mod gpu_optimisation {
         dev: &Arc<CudaDevice>,
         mut funcs: HashMap<&'static str, CudaFunction>,
     ) -> anyhow::Result<Option<Vec<(&'a [f32], usize)>>> {
-        let query_refs: Vec<&[f32]> = query_vectors.iter().map(|v| &v[..]).collect();
-        let (mean_query_vector, variances) = cuda_calculate_mean_and_variance(&query_refs, dev, funcs)?;
-    
+        let (mean_query_dev, variances_dev) =
+            cuda_calculate_mean_and_variance(query_vectors, dev, &mut funcs)?;
+
         let num_vectors = database.len();
         let num_dimensions = 250;
         let flattened_database: Vec<f32> = database.iter().flatten().cloned().collect();
         let database_dev = dev.htod_sync_copy(&flattened_database)?;
-        let mean_query_dev = dev.htod_sync_copy(&mean_query_vector)?;
-        let variances_dev = dev.htod_sync_copy(&variances)?;
         let mut distances_dev = dev.alloc_zeros::<f32>(num_vectors)?;
-    
+
         let cfg = LaunchConfig {
             block_dim: (256, 1, 1),
             grid_dim: ((num_vectors as u32 + 255) / 256, 1, 1),
             shared_mem_bytes: 0,
         };
-    
+        let _ = dev.synchronize();
+
         unsafe {
             funcs.remove("calculate_distances").unwrap().launch(
                 cfg,
@@ -548,52 +571,36 @@ mod gpu_optimisation {
                 ),
             )
         }?;
-    
+
         let mut distances_host = vec![0.0f32; num_vectors];
+
         dev.dtoh_sync_copy_into(&distances_dev, &mut distances_host)?;
-    
-        // Utiliser thrust pour trier les distances et les indices
-        let mut indices = (0..num_vectors).collect::<Vec<i32>>();
-        let indices_dev = dev.htod_sync_copy(&indices)?;
-    
-        unsafe {
-            funcs.remove("sort_distances").unwrap().launch(
-                cfg,
-                (&distances_dev, &indices_dev, num_vectors as i32),
-            )
-        }?;
-    
-        // Récupérer les distances triées
-        dev.dtoh_sync_copy_into(&distances_dev, &mut distances_host)?;
-        dev.dtoh_sync_copy_into(&indices_dev, &mut indices)?;
-    
+
         let mut heap: BinaryHeap<(FloatOrd, usize)> = BinaryHeap::with_capacity(k);
-    
-        for (i, &distance) in distances_host.iter().enumerate().take(k) {
+
+        for (i, &distance) in distances_host.iter().enumerate() {
             let ord_dist = FloatOrd(distance);
             if heap.len() < k {
-                heap.push((ord_dist, indices[i] as usize));
+                heap.push((ord_dist, i));
             } else if let Some(&(FloatOrd(top_dist), _)) = heap.peek() {
                 if distance < top_dist {
                     heap.pop();
-                    heap.push((ord_dist, indices[i] as usize));
-    
-                    // Gestion de la convergence
+                    heap.push((ord_dist, i as usize));
+
                     if (top_dist - distance).abs() < convergence_threshold {
                         return Ok(None);
                     }
                 }
             }
         }
-    
+
         let result: Vec<(&[f32], usize)> = heap
             .into_iter()
             .map(|(_, index)| (&database[index][..], index))
             .collect();
-    
+
         Ok(Some(result))
     }
-
 }
 #[cfg(feature = "cuda")]
 pub use gpu_optimisation::{cuda_solve_challenge, KERNEL};

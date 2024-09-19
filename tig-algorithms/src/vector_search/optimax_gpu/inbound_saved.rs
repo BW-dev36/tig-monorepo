@@ -410,7 +410,7 @@ mod gpu_optimisation {
 
         for query in challenge.query_vectors.iter() {
             let mut best = (std::f32::MAX, None);
-            nearest_neighbor_search(&kd_tree, query, &mut best);
+            nearest_neighbor_search(&kd_tree, query, &mut best, 64);
 
             if let Some(best_index) = best.1 {
                 best_indexes.push(best_index);
@@ -479,25 +479,6 @@ mod gpu_optimisation {
         Ok(result)
     }
 
-    #[cfg(feature = "cuda")]
-    fn cuda_build_kd_tree<'a>(
-        subset: &mut [(&'a [f32], usize)],
-        dev: &Arc<CudaDevice>,
-        funcs: &mut HashMap<&'static str, CudaFunction>,
-    ) -> Option<Box<KDNode<'a>>> {
-        None
-    }
-
-    #[cfg(feature = "cuda")]
-    fn cuda_nearest_neighbor_search(
-        kd_tree: &Option<Box<KDNode<'_>>>,
-        query: &[f32],
-        best: &mut (f32, Option<usize>),
-        dev: &Arc<CudaDevice>,
-        funcs: &mut HashMap<&'static str, CudaFunction>,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
 }
 #[cfg(feature = "cuda")]
 pub use gpu_optimisation::{cuda_solve_challenge, KERNEL};

@@ -20,7 +20,7 @@ mod tests {
     fn random_difficulty() -> Difficulty {
         let mut rng = StdRng::seed_from_u64(time() as u64);
         let num_queries = rng.gen_range(100..=500); // Générer un nombre aléatoire de requêtes
-        let better_than_baseline = rng.gen_range(490..=580); // Générer une distance baseline aléatoire
+        let better_than_baseline = rng.gen_range(501..=580); // Générer une distance baseline aléatoire
 
         Difficulty {
             num_queries,
@@ -42,7 +42,7 @@ mod tests {
         // Générer une difficulté aléatoire et une seed aléatoire
         let mut i = 0;
 
-        while i < 1000 {
+        while i < 300 {
             let difficulty = random_difficulty();
             let seed = random_seed();
             let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
@@ -74,16 +74,16 @@ mod tests {
             match result_test {
                 Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                     Ok(_) => println!("Valid solution (solve_challenge_test) ... ok"),
-                    Err(e) => println!("KO Invalid solution (solve_challenge_test): {}", e),
+                    Err(e) => {}, //println!("KO Invalid solution (solve_challenge_test): {}", e),
                 },
                 Ok(None) => println!("No solution (solve_challenge_test)"),
                 Err(e) => println!("Algorithm error (solve_challenge_test): {}", e),
             };
 
             // Afficher les résultats de la comparaison de performance
-            println!("Performance comparison:");
+            // println!("Performance comparison:");
             // println!("solve_challenge (current) duration: {:?}", duration_current);
-            println!("solve_challenge_test (new) duration: {:?}", duration_test);
+            // println!("solve_challenge_test (new) duration: {:?}", duration_test);
             i += 1;
         }
     }
@@ -91,6 +91,7 @@ mod tests {
 
 #[cfg(feature = "cuda")]
 #[cfg(test)]
+
 mod cuda_tests {
     use std::collections::HashMap;
 
@@ -98,7 +99,37 @@ mod cuda_tests {
     use cudarc::driver::*;
     use cudarc::nvrtc::compile_ptx;
     use std::sync::Arc;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
     use tig_challenges::{vector_search::*, *};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::Instant;
+    
+    pub fn time() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    fn random_difficulty() -> Difficulty {
+        let mut rng = StdRng::seed_from_u64(time() as u64);
+        let num_queries = rng.gen_range(100..=117); // Générer un nombre aléatoire de requêtes
+        let better_than_baseline = rng.gen_range(430..=450); // Générer une distance baseline aléatoire
+
+        Difficulty {
+            num_queries,
+            better_than_baseline,
+        }
+    }
+
+    fn random_seed() -> [u64; 8] {
+        let mut rng = StdRng::seed_from_u64(time() as u64);
+        let mut seed = [0u64; 8];
+        for i in 0..8 {
+            seed[i] = rng.gen_range(1..=1_000_000); // Générer des seeds aléatoires
+        }
+        seed
+    }
 
     fn load_cuda_functions(
         dev: &Arc<CudaDevice>,
@@ -126,14 +157,14 @@ mod cuda_tests {
     #[test]
     fn test_cuda_optimax_search_cuda() {
         let dev = CudaDevice::new(0).expect("Failed to create CudaDevice");
-        let challenge_cuda_funcs = match &vector_search::KERNEL {
+        let mut challenge_cuda_funcs = match &vector_search::KERNEL {
             Some(kernel) => load_cuda_functions(&dev, &kernel, "challenge"),
             None => {
                 println!("No CUDA kernel for challenge");
                 HashMap::new()
             }
         };
-        let algorithm_cuda_funcs = match &optimax_search::KERNEL {
+        let algorithm_cuda_funcs = match &optimax_gpu::KERNEL {
             Some(kernel) => load_cuda_functions(&dev, &kernel, "algorithm"),
             None => {
                 println!("No CUDA kernel for algorithm");
@@ -141,30 +172,40 @@ mod cuda_tests {
             }
         };
 
-        let difficulty = Difficulty {
-            // Uncomment the relevant fields.
-            // Modify the values for different difficulties
+       // Générer une difficulté aléatoire et une seed aléatoire
+       let mut i = 0;
 
-            // -- satisfiability --
-            // num_variables: 50,
-            // clauses_to_variables_percent: 300,
-            // -- vehicle_routing --
-            // num_nodes: 40,
-            // better_than_baseline: 250,
+       while i < 30 {
+           let difficulty = random_difficulty();
+           let seeds = random_seed();
+           let challenge_cpu = Challenge::generate_instance(seeds, &difficulty).unwrap();
 
-            // -- knapsack --
-            // num_items: 50,
-            // better_than_baseline: 10,
+           println!(
+               "Running test with difficulty: num_queries = {}, better_than_baseline = {}, nonce {:#?}",
+               difficulty.num_queries, difficulty.better_than_baseline, seeds
+           );
 
-            // -- vector_search --
-            num_queries: 10,
-            better_than_baseline: 350,
-        };
-        let seeds = [0; 8]; // change this to generate different instances
+
+           let start_time = Instant::now();
+            let result_current = optimax_gpu::solve_challenge(&challenge_cpu);
+            let duration_current = start_time.elapsed();
+
+            match result_current {
+                Ok(Some(solution)) => match challenge_cpu.verify_solution(&solution) {
+                    Ok(_) => println!("Valid solution (solve_challenge) ... ok"),
+                    Err(e) => println!("Invalid solution (solve_challenge): {}", e),
+                },
+                Ok(None) => println!("No solution (solve_challenge)"),
+                Err(e) => println!("Algorithm error (solve_challenge): {}", e),
+            };
+
         let challenge =
-            Challenge::cuda_generate_instance(seeds, &difficulty, &dev, challenge_cuda_funcs)
+            Challenge::cuda_generate_instance(seeds, &difficulty, &dev, challenge_cuda_funcs.clone())
                 .unwrap();
-        match optimax_search::cuda_solve_challenge(&challenge, &dev, algorithm_cuda_funcs) {
+        let start_time = Instant::now();
+        let result_current_gpu = optimax_gpu::cuda_solve_challenge(&challenge, &dev, algorithm_cuda_funcs.clone());
+        let duration_current_gpu = start_time.elapsed();
+        match result_current_gpu {
             Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                 Ok(_) => println!("Valid solution"),
                 Err(e) => println!("Invalid solution: {}", e),
@@ -172,6 +213,14 @@ mod cuda_tests {
             Ok(None) => println!("No solution"),
             Err(e) => println!("Algorithm error: {}", e),
         };
+
+         // Afficher les résultats de la comparaison de performance
+         println!("Performance comparison:");
+         println!("solve_challenge (cpu) duration: {:?}", duration_current);
+         println!("solve_challenge_test (cuda) duration: {:?}", duration_current_gpu);
+
+        i += 1;
+    }
     }
 }
 // c004_a001

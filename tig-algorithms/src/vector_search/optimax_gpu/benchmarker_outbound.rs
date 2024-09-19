@@ -316,7 +316,7 @@ mod gpu_optimisation {
     use cudarc::driver::*;
     use std::{collections::HashMap, sync::Arc};
     use tig_challenges::CudaKernel;
-    pub const KERNEL: Option<CudaKernel> = Some(CudaKernel {
+    pub const KERNEL_OLD: Option<CudaKernel> = Some(CudaKernel {
         src: r#"
         
         extern "C" __global__ void filter_vectors(float* query_mean, float* vectors, float* distances, int num_vectors, int num_dimensions) {
@@ -336,7 +336,7 @@ mod gpu_optimisation {
         funcs: &["filter_vectors"],
     });
 
-    pub fn cuda_solve_challenge(
+    pub fn cuda_solve_challenge_old(
         challenge: &Challenge,
         dev: &Arc<CudaDevice>,
         mut funcs: HashMap<&'static str, CudaFunction>,
@@ -465,4 +465,4 @@ mod gpu_optimisation {
     }
 }
 #[cfg(feature = "cuda")]
-pub use gpu_optimisation::{cuda_solve_challenge, KERNEL};
+pub use gpu_optimisation::{cuda_solve_challenge_old, KERNEL_OLD};
