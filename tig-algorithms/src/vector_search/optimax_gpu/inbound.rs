@@ -294,7 +294,7 @@ pub fn solve_challenge(challenge: &Challenge) -> anyhow::Result<Option<Solution>
         _ => 1000,
     };
 
-    let distance_threshold = 0.000001;
+    let distance_threshold = 0.00001;
     let subset = filter_relevant_vectors(
         &challenge.vector_database,
         &challenge.query_vectors,
@@ -468,7 +468,7 @@ mod gpu_optimisation {
             &challenge.vector_database,
             &challenge.query_vectors,
             subset_size,
-            0.000001,
+            0.00001,
             dev,
             funcs,
         )?;

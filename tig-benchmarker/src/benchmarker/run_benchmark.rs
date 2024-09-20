@@ -12107,7 +12107,11 @@ pub async fn execute(nonce_iterators: Vec<Arc<Mutex<NonceIterator>>>, job: &Job,
                                             .unwrap();
                                         match solve_challenge(&challenge) {
                                             Ok(Some(solution)) => {
-                                                challenge.verify_solution(&solution).is_err()
+                                                let res = challenge.verify_solution(&solution).is_err();
+                                                if res == false {
+                                                    println!("Optimax_v2 found a solution");
+                                                }
+                                                res
                                             }
                                             _ => true,
                                         }
