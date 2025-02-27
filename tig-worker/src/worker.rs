@@ -85,6 +85,8 @@ pub fn compute_solution(
     let result = entry_point.call(&mut store, (challenge_ptr, challenge_len));
 
     let fuel_consumed = max_fuel - store.get_fuel().unwrap();
+    
+    println!("Fuel consummed : {}", fuel_consumed);
 
     let solution_ptr = result.map_err(|e| {
         anyhow!(

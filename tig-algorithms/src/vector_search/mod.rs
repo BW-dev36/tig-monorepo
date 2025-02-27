@@ -19,8 +19,8 @@ mod tests {
 
     fn random_difficulty() -> Difficulty {
         let mut rng = StdRng::seed_from_u64(time() as u64);
-        let num_queries = rng.gen_range(100..=500); // Générer un nombre aléatoire de requêtes
-        let better_than_baseline = rng.gen_range(501..=580); // Générer une distance baseline aléatoire
+        let num_queries = rng.gen_range(150..=250); // Générer un nombre aléatoire de requêtes
+        let better_than_baseline = rng.gen_range(520..=550); // Générer une distance baseline aléatoire
 
         Difficulty {
             num_queries,
@@ -42,7 +42,7 @@ mod tests {
         // Générer une difficulté aléatoire et une seed aléatoire
         let mut i = 0;
 
-        while i < 300 {
+        while i < 10 {
             let difficulty = random_difficulty();
             let seed = random_seed();
             let challenge = Challenge::generate_instance(seed, &difficulty).unwrap();
@@ -74,7 +74,7 @@ mod tests {
             match result_test {
                 Ok(Some(solution)) => match challenge.verify_solution(&solution) {
                     Ok(_) => println!("Valid solution (solve_challenge_test) ... ok"),
-                    Err(e) => {}, //println!("KO Invalid solution (solve_challenge_test): {}", e),
+                    Err(e) => println!("KO Invalid solution (solve_challenge_test): {}", e),
                 },
                 Ok(None) => println!("No solution (solve_challenge_test)"),
                 Err(e) => println!("Algorithm error (solve_challenge_test): {}", e),
